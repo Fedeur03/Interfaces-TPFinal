@@ -6,7 +6,17 @@
   <meta name="description" content="AvisAR — Plataforma municipal participativa de reclamos para los vecinos de Vicente López." />
   <title>AvisAR · Reclamos de Vicente López</title>
   <link rel="icon" type="image/svg+xml" href="assets/favicon.svg" />
-  <link rel="stylesheet" href="styles.css?v=acceso-municipal" />
+  <link rel="stylesheet" href="styles.css?v=optimizacion" />
+  <script>
+    if (!location.hash || location.hash.split("?")[0] === "#/") {
+      const map = document.createElement("link");
+      map.rel = "preload";
+      map.as = "image";
+      map.href = "assets/vl-map-overview.webp";
+      map.setAttribute("fetchpriority", "high");
+      document.head.append(map);
+    }
+  </script>
 </head>
 <body>
   <a class="skip-link" href="#app">Saltar al contenido</a>
@@ -17,7 +27,7 @@
       <span class="burger"><i></i><i></i><i></i></span>
     </button>
 
-    <a href="#/" class="brand" aria-label="AvisAR inicio">
+    <a href="#/" class="brand" aria-label="AvisAR Participación vecinal, inicio">
       <span class="brand-mark" aria-hidden="true">
         <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M12 21s-7-5.2-7-11a7 7 0 0 1 14 0c0 5.8-7 11-7 11Z"/>
@@ -149,10 +159,10 @@
   <div class="chart-tooltip" id="chart-tooltip" role="tooltip" hidden></div>
   <div class="button-tooltip" id="button-tooltip" role="tooltip" hidden></div>
 
-  <script src="demo-claims.js?v=municipio"></script>
-  <script src="claim-map.js?v=mapa-tactil"></script>
-  <script src="civic-content.js?v=impacto-scroll"></script>
+  <script src="demo-claims.js?v=optimizacion"></script>
+  <script src="claim-map.js?v=optimizacion"></script>
+  <script src="civic-content.js?v=optimizacion"></script>
   <script src="evidence.js?v=municipio"></script>
-  <script src="app.js?v=acceso-municipal"></script>
+  <script src="app.js?v=optimizacion"></script>
 </body>
 </html>

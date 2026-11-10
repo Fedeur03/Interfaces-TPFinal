@@ -82,10 +82,24 @@ function renderAyuda(terminos) {
   </div></section>`;
 }
 
-async function updateMunicipalNews(scope) {
+const municipalNewsObserver = new IntersectionObserver((entries, observer) => {
+  for (const entry of entries) {
+    if (!entry.isIntersecting) continue;
+    observer.unobserve(entry.target);
+    updateMunicipalNews(entry.target);
+  }
+}, { rootMargin: "200px" });
+
+function loadMunicipalNews(scope) {
+  municipalNewsObserver.disconnect();
   const results = scope.querySelector("[data-news-view]");
   if (!results) return;
-  const status = scope.querySelector("#news-source");
+  if (results.dataset.newsView === "preview") municipalNewsObserver.observe(results);
+  else updateMunicipalNews(results);
+}
+
+async function updateMunicipalNews(results) {
+  const status = results.closest("section").querySelector("#news-source");
   const text = (html) => {
     const template = document.createElement("template");
     template.innerHTML = String(html || "");
@@ -125,7 +139,7 @@ function renderContacto() {
 function renderPlaceSlider() {
   return `<div class="place-slider" aria-label="Lugares de Vicente López" aria-roledescription="carrusel">
     <div class="place-frame">${PLACE_SLIDES.map(([key, title, text], i) => `<article class="place-slide" ${i ? "hidden" : ""}>
-      <img src="assets/municipio-${key}.jpg" alt="" loading="lazy">
+      <img src="assets/municipio-${key}.webp" alt="" loading="lazy">
       <div class="place-caption"><span>Recorré Vicente López</span><h3>${title}</h3><p>${text}</p></div>
     </article>`).join("")}</div>
     <div class="place-controls"><button type="button" class="icon-btn" data-place="-1" aria-label="Lugar anterior">‹</button>
@@ -155,6 +169,7 @@ let impactFrame = 0;
 
 function drawImpactCards() {
   impactFrame = 0;
+  if (!impactCards.length) return;
   const viewport = window.visualViewport?.height || window.innerHeight;
   const viewportTop = window.visualViewport?.offsetTop || 0;
   const columns = impactCards[0]?.card.parentElement;

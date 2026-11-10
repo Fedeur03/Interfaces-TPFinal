@@ -70,7 +70,8 @@ function icon(name, size = 20, stroke = 2) {
 const VL_CENTER = [-34.5225, -58.4965];
 // Límites exactos de la imagen estática assets/vl-map.jpg (OSM, zoom 14).
 const MAP_BOUNDS = { north: -34.469981, south: -34.569977, west: -58.550005, east: -58.394995 };
-const MAP_SRC = "assets/vl-map.jpg";
+const MAP_SRC = "assets/vl-map.webp";
+const MAP_OVERVIEW_SRC = "assets/vl-map-overview.webp";
 
 const BARRIOS = {
   "La Lucila":      { lat: -34.497, lng: -58.477 },
@@ -220,7 +221,7 @@ function initials(name) {
 
 function claimCard(c) {
   const cat = catMeta(c.categoria);
-  const photo = claimPhoto(c);
+  const photo = claimPhoto(c, "card");
   const media = photo && !photo.startsWith("data:video/") ? `<img class="media-img" src="${esc(photo)}" alt="" loading="lazy">` : `<span class="big-ic">${icon(cat.icon, 52, 1.7)}</span>`;
   return `
     <a class="claim-card" href="#/reclamo/${c.id}">
@@ -277,7 +278,7 @@ function reportMap(claims, { labels = true, pick = false, focus, cls = "" } = {}
     : "Acercate con dos dedos, los botones o la rueda. Arrastrá para recorrer el mapa.";
   return `<div class="static-map claim-map ${cls} ${pick ? "is-picker" : ""} ${focus ? "is-zoomed" : ""}" data-claim-map="${index}" ${pick ? 'id="pickMap"' : ""} tabindex="0" role="region" aria-label="Mapa interactivo de Vicente López" aria-describedby="mapHint-${index}">
     <div class="map-world">
-      <img class="static-map-img" src="${MAP_SRC}" alt="" draggable="false">
+      <img class="static-map-img" src="${focus ? MAP_SRC : MAP_OVERVIEW_SRC}" alt="" draggable="false" ${cls === "home-map" ? 'fetchpriority="high"' : ""}>
       <span class="map-tint" aria-hidden="true"></span>
       ${labels ? `<span class="map-labels" aria-hidden="true">${barrioTags()}</span>` : ""}
       ${pick ? draftPin() : ""}
@@ -650,7 +651,7 @@ function renderReclamos() {
 
 function claimRow(c, { thumbnail = false, status = false } = {}) {
   const cat = catMeta(c.categoria);
-  const photo = claimPhoto(c);
+  const photo = claimPhoto(c, "thumb");
   const image = photo && !photo.startsWith("data:video/");
   return `<article class="claim-row">
     ${thumbnail ? `<div class="claim-thumb" style="--c:${cat.color}">${image ? `<img src="${esc(photo)}" alt="" loading="lazy">` : icon(cat.icon, 26)}</div>` : ""}
@@ -985,10 +986,10 @@ function renderMunicipio() {
         <p>Vicente López está en el norte del Gran Buenos Aires, a orillas del Río de la Plata. Sus nueve barrios reúnen zonas residenciales, centros comerciales y espacios de encuentro como el Paseo de la Costa.</p>
         <p>El partido se creó el <strong>21 de diciembre de 1905</strong>, al separarse de San Isidro, y Olivos quedó como cabecera. Las fechas que recuerdan el origen de cada barrio quedaron reunidas en el <a href="https://www.vicentelopez.gov.ar/boletin_oficial/bulletin/uploads/historical/1533.pdf#page=14">Boletín Municipal</a>.</p>
       </div>
-      <img src="assets/municipio-costa.jpg" alt="Paseo de la Costa de Vicente López">
+      <img src="assets/municipio-costa.webp" alt="Paseo de la Costa de Vicente López">
     </div>
     <div class="muni-intro-row">
-      <img src="assets/municipio-edificio.jpg" alt="Edificio municipal de Vicente López">
+      <img src="assets/municipio-edificio.webp" alt="Edificio municipal de Vicente López">
       <div><h2>De la memoria barrial a la participación</h2>
         <p>Los estudios Lumiton, en Munro, fueron pioneros del cine sonoro argentino. Hoy el museo conserva su legado. En Olivos, el Museo de la Ciudad recorre la historia de los nueve barrios. <a href="https://www.vicentelopez.gov.ar/espacio-vl/museo-lumiton/">Museo Lumiton</a> · <a href="https://www.vicentelopez.gov.ar/espacio-vl/museo-de-la-ciudad-de-vicente-lopez/">Museo de la Ciudad</a>.</p>
         <p>En AvisAR podés señalar problemas del espacio público, acompañar los reclamos de otros vecinos y seguir las intervenciones que se registran en tu barrio.</p>
@@ -1440,7 +1441,7 @@ function render({ deferMotion = false, fallbackTransition = false } = {}) {
   app.innerHTML = html;
   updateImpactCards(app);
   loadEvidenceFiles(app);
-  if (view === "home" || view === "novedades") updateMunicipalNews(app);
+  loadMunicipalNews(app);
   const queue = app.querySelector(".municipal-list");
   const selected = queue?.querySelector("a[aria-current]");
   if (selected) {

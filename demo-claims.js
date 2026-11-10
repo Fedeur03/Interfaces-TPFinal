@@ -11,18 +11,18 @@ const REFERENCE_PHOTOS = {
   canilla: { label: "Canilla con pérdida de agua", author: "Angelsharum", source: "https://commons.wikimedia.org/wiki/File:Dripping_Faucet.JPG", license: "CC BY-SA 3.0", licenseUrl: "https://creativecommons.org/licenses/by-sa/3.0/" },
 };
 
-function referencePhoto(claim) {
+function referencePhoto(claim, variant = "") {
   if (claim.foto && !claim.demo) return null;
   const key = claim.categoria === "infraestructura" ? (/vereda|cordón roto/i.test(claim.titulo) ? "vereda" : "bache")
     : claim.categoria === "espacios_verdes" || /restos de poda/i.test(claim.titulo) ? "ramas"
     : claim.categoria === "otro" && /canilla/i.test(claim.titulo) ? "canilla"
     : claim.categoria;
   const photo = REFERENCE_PHOTOS[key];
-  return photo ? { ...photo, src: "assets/fotos-referencia/" + key + ".jpg" } : null;
+  return photo ? { ...photo, src: "assets/fotos-referencia/" + key + (variant ? "-" + variant : "") + ".webp" } : null;
 }
 
-function claimPhoto(claim) {
-  return referencePhoto(claim)?.src || claim.foto;
+function claimPhoto(claim, variant) {
+  return referencePhoto(claim, variant)?.src || claim.foto;
 }
 
 function makePetitionClaims() {

@@ -243,9 +243,9 @@ input, select, textarea { font: inherit; }
 .chip .sw { width: 7px; height: 7px; border-radius: 50%; background: var(--c); }
 
 .badge { display: inline-flex; align-items: center; gap: 5px; padding: 4px 10px; border-radius: 999px; font-size: .74rem; font-weight: 700; border: 1px solid transparent; }
-.badge-abierto { color: var(--warn); background: var(--warn-soft); border-color: #f5d9a8; }
+.badge-abierto { color: #9a4c00; background: var(--warn-soft); border-color: #f5d9a8; }
 .badge-en_proceso { color: var(--info); background: var(--info-soft); border-color: #c9d8fb; }
-.badge-resuelto { color: var(--ok); background: var(--ok-soft); border-color: #bfe8cb; }
+.badge-resuelto { color: #267044; background: var(--ok-soft); border-color: #bfe8cb; }
 .badge-verified { color: var(--primary); background: var(--primary-soft); border-color: #bfe3dd; }
 .badge-new { color: var(--accent); background: var(--accent-soft); border-color: #fbd0ad; }
 
@@ -479,6 +479,7 @@ input, select, textarea { font: inherit; }
 
 /* ---------- Footer ---------- */
 .site-footer { margin-top: 26px; border-top: 1px solid #d8cfe6; background: #f2edf7; padding: 38px 0 18px; }
+#app:empty + .site-footer { visibility: hidden; }
 
 /* Identidad municipal y servicios al vecino */
 .topbar { border-top: 3px solid #4f2f7d; }

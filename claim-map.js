@@ -6,6 +6,7 @@ class ClaimMap {
   constructor(stage, { claims, focus, pick }) {
     this.stage = stage;
     this.world = stage.querySelector(".map-world");
+    this.image = this.world.querySelector(".static-map-img");
     this.layer = stage.querySelector(".map-pins");
     this.ghosts = document.createElement("div");
     this.ghosts.className = "map-ghosts";
@@ -85,6 +86,7 @@ class ClaimMap {
 
   setZoom(level, x = this.width / 2, y = this.height / 2, point = this.displayedPointAt(x, y)) {
     level = clamp(level, 0, MAP_ZOOM.length - 1);
+    if (level > 0 && this.image.getAttribute("src") === MAP_OVERVIEW_SRC) this.image.src = MAP_SRC;
     if (this.level === level) {
       this.panTo(point, x, y);
       this.updateTabStops();
@@ -212,7 +214,7 @@ class ClaimMap {
     const extra = count > 1 ? 'type="button"' : this.pick ? 'aria-hidden="true"' : `href="#/reclamo/${esc(claim.id)}"`;
     const category = catMeta(claim.categoria);
     const photo = (c) => {
-      const src = claimPhoto(c);
+      const src = claimPhoto(c, "thumb");
       return src && !src.startsWith("data:video/") ? `<img src="${esc(src)}" alt="" draggable="false">` : "";
     };
     const preview = photo(claim) || icon(category.icon, 24);
