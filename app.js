@@ -158,6 +158,8 @@ let draftLatLng = { lat: VL_CENTER[0], lng: VL_CENTER[1] };
 let draftBarrio = nearestBarrio(draftLatLng.lat, draftLatLng.lng);
 let draftCat = "";
 let draftPicked = false;
+let draftAddress = "";
+let addressRequest;
 
 function save() { try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch (e) { /* ignore */ } }
 function getClaim(id) { return state.claims.find((c) => c.id === id); }
@@ -256,11 +258,125 @@ function reportMap(claims, { labels = true, pick = false, focus, cls = "" } = {}
   </div>`;
 }
 
-function selectMapLocation({ lat, lng }) {
+function draftLocationLabel() {
+  if (!draftPicked) return "Buscá una dirección o marcá un punto en el mapa.";
+  const location = draftAddress || `${draftBarrio} · ${draftLatLng.lat.toFixed(5)}, ${draftLatLng.lng.toFixed(5)}`;
+  return `Ubicación elegida: <strong>${esc(location)}</strong>`;
+}
+
+function setDraftLocation({ lat, lng }, address = "", barrio = nearestBarrio(lat, lng)) {
   draftLatLng = { lat, lng };
-  draftBarrio = nearestBarrio(lat, lng);
+  draftBarrio = barrio;
   draftPicked = true;
-  document.getElementById("draftBarrio").innerHTML = `Ubicación elegida: <strong>${esc(draftBarrio)}</strong> · ${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+  draftAddress = address;
+  document.getElementById("draftAddress").value = address;
+  document.getElementById("draftBarrio").innerHTML = draftLocationLabel();
+}
+
+function cancelAddressSearch() {
+  addressRequest?.abort();
+  addressRequest = undefined;
+}
+
+function clearAddressResults() {
+  cancelAddressSearch();
+  const search = document.querySelector('[data-action="find-address"]');
+  if (!search) return;
+  search.disabled = false;
+  const matches = document.getElementById("addressMatches");
+  matches.onchange = null;
+  matches.replaceChildren();
+  matches.parentElement.hidden = true;
+  document.getElementById("addressFeedback").textContent = "";
+}
+
+function selectMapLocation(location) {
+  clearAddressResults();
+  setDraftLocation(location);
+}
+
+function streetWords(text) {
+  return text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().match(/[a-z0-9]+/g)
+    ?.filter((word) => !["av", "avda", "avenida", "calle", "de", "del", "la", "las", "los"].includes(word)) || [];
+}
+
+function locateAddressResults(rows, street, number) {
+  const words = streetWords(street);
+  const results = [];
+  for (const row of rows) {
+    const { lat, lon: lng } = row.ubicacion || {};
+    if (row.departamento?.id !== "06861" || row.altura?.valor !== number || !row.calle?.nombre || !row.nomenclatura) continue;
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)
+      || lat < MAP_BOUNDS.south || lat > MAP_BOUNDS.north || lng < MAP_BOUNDS.west || lng > MAP_BOUNDS.east) continue;
+    const match = streetWords(row.calle.nombre);
+    if (!words.every((word) => match.includes(word))) continue;
+    if (results.some((result) => Math.hypot(result.location.lat - lat, result.location.lng - lng) < .00018)) continue;
+    const locality = row.nomenclatura.split(",")[1]?.trim();
+    const barrio = Object.hasOwn(BARRIOS, locality) ? locality : nearestBarrio(lat, lng);
+    results.push({ location: { lat, lng }, label: row.nomenclatura, barrio });
+  }
+  return results;
+}
+
+async function findDraftAddress() {
+  const input = document.getElementById("draftAddress");
+  const button = document.querySelector('[data-action="find-address"]');
+  if (button.disabled) return;
+  clearAddressResults();
+  const feedback = document.getElementById("addressFeedback");
+  const address = input.value.split(",")[0].trim();
+  const parts = address.match(/^(.+?)\s+(\d+)$/);
+  if (!parts || !streetWords(parts[1]).length) {
+    feedback.textContent = "Escribí la calle y el número, por ejemplo Maipú 2609.";
+    input.focus();
+    return;
+  }
+
+  const controller = new AbortController();
+  addressRequest = controller;
+  const timeout = setTimeout(() => controller.abort(), 10000);
+  button.disabled = true;
+  feedback.textContent = "Buscando la dirección…";
+  const query = new URLSearchParams({
+    direccion: address, provincia: "Buenos Aires", departamento: "Vicente Lopez", max: "15",
+  });
+  try {
+    const response = await fetch("https://apis.datos.gob.ar/georef/api/v2.1/direcciones?" + query, {
+      signal: controller.signal, credentials: "omit",
+    });
+    if (!response.ok) throw new Error("Georef HTTP " + response.status);
+    const { direcciones = [] } = await response.json();
+    if (addressRequest !== controller || !input.isConnected || location.hash.split("?")[0] !== "#/crear") return;
+    const results = locateAddressResults(direcciones, parts[1], Number(parts[2]));
+    if (!results.length) {
+      feedback.textContent = "No encontramos esa dirección en Vicente López. Revisá la calle y el número o marcá un punto en el mapa.";
+      return;
+    }
+    const map = liveMaps.find((item) => item.stage.id === "pickMap");
+    const choose = (result) => {
+      setDraftLocation(result.location, result.label, result.barrio);
+      map.showPin(result.location);
+    };
+    choose(results[0]);
+    feedback.textContent = results.length === 1 ? "Dirección marcada. Revisá el punto antes de enviar."
+      : "Hay varias coincidencias. Revisá el punto o elegí otra dirección.";
+    if (results.length > 1) {
+      const matches = document.getElementById("addressMatches");
+      results.forEach((result, i) => matches.add(new Option(`${i + 1}. ${result.label}`, i)));
+      matches.parentElement.hidden = false;
+      matches.onchange = () => choose(results[Number(matches.value)]);
+    }
+  } catch {
+    if (addressRequest === controller && input.isConnected) {
+      feedback.textContent = "No pudimos consultar la dirección. Podés reintentar o marcar el punto en el mapa.";
+    }
+  } finally {
+    clearTimeout(timeout);
+    if (addressRequest === controller) {
+      addressRequest = undefined;
+      button.disabled = false;
+    }
+  }
 }
 
 /* ---------------- Shell ---------------- */
@@ -564,7 +680,7 @@ function renderCrear() {
   const opts = Object.entries(REPORT_CATEGORIES).map(([k, c]) => `<option value="${k}" ${k === draftCat ? "selected" : ""}>${c.label}</option>`).join("");
   return `<section class="section"><div class="container">
     <div class="section-head"><div><span class="eyebrow">${icon("plus", 15)} Nuevo reclamo</span>
-      <h2>Subí tu reclamo</h2><p>Contanos qué pasa y marcá la ubicación exacta.</p></div></div>
+      <h2>Subí tu reclamo</h2><p>Contanos qué pasa y ubicá el reclamo.</p></div></div>
     <form class="create-grid" data-form="crear">
       <div class="panel panel-pad">
         <div class="field"><label for="categoria">Categoría</label><select class="input" id="categoria" name="categoria" required><option value="">Seleccioná una categoría</option>${opts}</select></div>
@@ -574,9 +690,17 @@ function renderCrear() {
         </div>
       </div>
       <div class="panel panel-pad">
-        <div class="field"><h3>Seleccioná en el mapa</h3><span class="hint">Hacé clic para marcar el lugar del reclamo.</span>
-          <div class="map-card map-card-pick">${reportMap(state.claims, { pick: true, cls: "pick-map" })}</div>
-          <p class="hint" id="draftBarrio" aria-live="polite">${draftPicked ? `Ubicación elegida: <strong>${esc(draftBarrio)}</strong> · ${draftLatLng.lat.toFixed(5)}, ${draftLatLng.lng.toFixed(5)}` : "Todavía no marcaste la ubicación en el mapa."}</p>
+        <div class="field"><h3>Ubicación del reclamo</h3>
+          <label for="draftAddress">Dirección</label>
+          <div class="address-search">
+            <input class="input" id="draftAddress" name="direccion" type="search" maxlength="140" autocomplete="off" value="${esc(draftAddress)}" placeholder="Calle y número" aria-describedby="addressHelp addressFeedback">
+            <button type="button" class="btn btn-ghost" data-action="find-address">${icon("search", 16)} Buscar</button>
+          </div>
+          <span class="hint" id="addressHelp">Buscá dentro de Vicente López o marcá el lugar directamente en el mapa.</span>
+          <span class="hint address-feedback" id="addressFeedback" role="status"></span>
+          <div class="field address-choices" hidden><label for="addressMatches">Coincidencias</label><select class="input" id="addressMatches"></select></div>
+          <div class="map-card map-card-pick">${reportMap(state.claims, { pick: true, focus: draftPicked ? draftLatLng : undefined, cls: "pick-map" })}</div>
+          <p class="hint" id="draftBarrio" aria-live="polite">${draftLocationLabel()}</p>
         </div>
         <button class="btn btn-primary btn-block" type="submit">${icon("upload", 17)} Enviar reclamo</button>
       </div>
@@ -592,6 +716,7 @@ function renderEnviado(id) {
       <div class="success-badge" aria-hidden="true"><span class="success-sparks"></span><svg viewBox="0 0 76 76" width="76" height="76" fill="none">
         <circle class="success-track" cx="38" cy="38" r="31"/>
         <circle class="success-ring" cx="38" cy="38" r="31" pathLength="100" transform="rotate(-90 38 38)"/>
+        <path class="success-guide" d="M24 39l10 10 19-22"/>
         <path class="success-tick" d="M24 39l10 10 19-22" pathLength="100"/>
       </svg></div>
       <h1>¡Reclamo enviado con éxito!</h1>
@@ -1072,6 +1197,7 @@ function replayCharts() {
 }
 
 function render({ deferMotion = false, fallbackTransition = false } = {}) {
+  cancelAddressSearch();
   chartObserver.disconnect();
   liveMaps.splice(0).forEach((map) => map.destroy());
   mapConfigs.length = 0;
@@ -1252,6 +1378,7 @@ function highlightChartStatus(button) {
 /* ---------------- Eventos: click ---------------- */
 document.addEventListener("click", (e) => {
   const t = e.target;
+  if (t.closest('[data-action="find-address"]')) { findDraftAddress(); return; }
   if (t.closest('[data-action="replay-charts"]')) { replayCharts(); return; }
   const seriesToggle = t.closest("[data-series-toggle]");
   if (seriesToggle) { toggleChartSeries(seriesToggle); return; }
@@ -1275,6 +1402,16 @@ document.addEventListener("click", (e) => {
 
   const notif = t.closest(".notif-item");
   if (notif) { const n = state.notifications.find((x) => x.id === notif.dataset.id); if (n && !n.leida) { n.leida = true; save(); } }
+});
+
+document.addEventListener("input", (event) => {
+  if (event.target.id !== "draftAddress") return;
+  clearAddressResults();
+  if (!draftAddress) return;
+  draftAddress = "";
+  draftPicked = false;
+  document.getElementById("draftPin").hidden = true;
+  document.getElementById("draftBarrio").innerHTML = draftLocationLabel();
 });
 
 /* ---------------- Eventos: change ---------------- */
@@ -1341,7 +1478,10 @@ document.addEventListener("submit", (e) => {
     if (!Object.hasOwn(REPORT_CATEGORIES, categoria)) { toast("Elegí una categoría."); return; }
     const descripcion = String(data.get("descripcion") || "").trim();
     if (descripcion.length < 20) { toast("La descripción debe tener al menos 20 caracteres."); return; }
-    if (!draftPicked) { toast("Marcá la ubicación exacta en el mapa."); return; }
+    if (!draftPicked || String(data.get("direccion") || "").trim() !== draftAddress) {
+      toast("Buscá la dirección o elegí un punto en el mapa.");
+      return;
+    }
     const file = form.querySelector('input[type="file"]')?.files[0];
     if (file && (file.size > 1200000 || !/^(image|video)\//.test(file.type))) {
       toast("Elegí una imagen o un video de hasta 1,2 MB.");
@@ -1350,6 +1490,7 @@ document.addEventListener("submit", (e) => {
     const owner = state.session.email;
     const { lat, lng } = draftLatLng;
     const barrio = draftBarrio;
+    const direccion = draftAddress || `${barrio} · ${lat.toFixed(5)}, ${lng.toFixed(5)}`;
     const submit = form.querySelector('button[type="submit"]');
     if (submit.disabled) return;
     submit.disabled = true;
@@ -1362,7 +1503,7 @@ document.addEventListener("submit", (e) => {
         id,
         numero: "F-" + (15300 + Math.floor(Math.random() * 700)),
         titulo: descripcion.length > 64 ? descripcion.slice(0, 61).trim() + "…" : descripcion,
-        categoria, barrio, direccion: `${barrio} · ${lat.toFixed(5)}, ${lng.toFixed(5)}`,
+        categoria, barrio, direccion,
         descripcion, fecha: new Date().toISOString().slice(0, 10), apoyos: 0, estado: "abierto",
         verificado: false, evidencia: "", foto, owner, comentarios: [],
         lat, lng,
@@ -1378,6 +1519,7 @@ document.addEventListener("submit", (e) => {
         return;
       }
       draftPicked = false;
+      draftAddress = "";
       draftCat = "";
       draftLatLng = { lat: VL_CENTER[0], lng: VL_CENTER[1] };
       draftBarrio = nearestBarrio(draftLatLng.lat, draftLatLng.lng);
@@ -1473,7 +1615,11 @@ window.addEventListener("hashchange", (event) => {
   const current = new URLSearchParams(query);
   const app = document.getElementById("app");
   const viewChanged = app.dataset.path !== (path || "#/");
-  const useTransition = viewChanged && typeof document.startViewTransition === "function";
+  const nav = document.getElementById("sidenav");
+  const menuOverlaps = mobileSidenav.matches ? nav.getBoundingClientRect().right > 0
+    : nav.matches(":hover, :has(:focus-visible)") || document.body.classList.contains("sidenav-pinned")
+      || nav.getBoundingClientRect().width > app.getBoundingClientRect().left + 1;
+  const useTransition = viewChanged && !menuOverlaps && typeof document.startViewTransition === "function";
 
   const update = () => {
     if (revision !== routeRevision) return;
@@ -1511,6 +1657,11 @@ document.addEventListener("visibilitychange", () => {
 });
 mobileSidenav.addEventListener("change", resetSidenav);
 document.addEventListener("keydown", (event) => {
+  if (event.key === "Enter" && event.target.id === "draftAddress") {
+    event.preventDefault();
+    findDraftAddress();
+    return;
+  }
   if (event.key === "Escape" && (document.body.classList.contains("sidenav-open") || document.body.classList.contains("sidenav-pinned"))) {
     setSidenav(false);
     document.getElementById("menuToggle").focus();

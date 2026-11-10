@@ -265,13 +265,23 @@ class ClaimMap {
     }
   }
 
-  placePin(point) {
-    const x = clamp(point.x, 1, 99);
-    const y = clamp(point.y, 1, 99);
+  positionPin({ x, y }) {
     this.draft.hidden = false;
     this.draft.style.left = `${x}%`;
     this.draft.style.top = `${y}%`;
+  }
+
+  placePin(point) {
+    const x = clamp(point.x, 1, 99);
+    const y = clamp(point.y, 1, 99);
+    this.positionPin({ x, y });
     this.pick(pctToLatlng(x, y));
+  }
+
+  showPin({ lat, lng }) {
+    const point = latlngToPct(lat, lng);
+    this.positionPin(point);
+    this.setZoom(Math.max(3, this.level), this.width / 2, this.height / 2, point);
   }
 
   wheel(event) {
