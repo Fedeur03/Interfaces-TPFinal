@@ -1,8 +1,7 @@
 # AvisAR · Vicente López
 
 Plataforma municipal participativa de reclamos para los vecinos de **Vicente López**.
-Hecha en **HTML + CSS + JavaScript vanilla**, sin build. Usa **Leaflet + OpenStreetMap**
-(por CDN) para el mapa real, con un mapa SVG propio como respaldo sin conexión.
+Hecha en **HTML + CSS + JavaScript vanilla**, sin build. El mapa usa una imagen local de **OpenStreetMap** y funciona sin conexión.
 
 ## Cómo abrirla
 
@@ -28,17 +27,18 @@ avisar-web/
 └── README.md
 ```
 
-## Mapa real
+## Mapa interactivo
 
-El mapa usa **Leaflet + OpenStreetMap** y se centra en el partido de **Vicente López**.
-Cada reclamo se dibuja con un **pin del color e ícono de su categoría** en la
-coordenada exacta elegida al crearlo. El Home muestra ese mapa como pieza central.
+Acercá o alejá el mapa con la rueda o con los botones **+** y **−**. Arrastrá para recorrerlo.
+Al acercarte, las tarjetas apiladas se separan y podés abrir cada reclamo. Los controles
+también funcionan con el teclado y la vista de creación conserva la ubicación elegida al cambiar el zoom.
 
-Si no hay conexión y Leaflet no carga, la app usa automáticamente un **mapa SVG
-de respaldo** con los barrios del partido, para que nunca quede en blanco.
+Se cargan 40 reclamos iniciales. Las imágenes de archivo tienen créditos de Wikimedia Commons.
 
-> La base arranca **vacía**: no hay reclamos precargados. El mapa se va llenando
-> a medida que los vecinos publican.
+## Animaciones
+
+La navegación usa View Transitions cuando el navegador lo admite, con una entrada CSS como respaldo.
+Los gráficos se animan cuando entran en pantalla y el check comienza después de la transición al comprobante.
 
 ## Pantallas (según flujo y wireframes)
 
@@ -46,6 +46,7 @@ de respaldo** con los barrios del partido, para que nunca quede en blanco.
 |------|----------|
 | `#/` | Home: mapa de Vicente López + introducción, estadísticas, categorías y últimos reclamos |
 | `#/reclamos` | Explorar reclamos con filtros (categoría, estado, palabra) |
+| `#/ver-reclamos` | Listado público, 10 reclamos por página |
 | `#/reclamo/:id` | Detalle: foto, descripción, barra de apoyo, estado reportado vs. municipal, noticias |
 | `#/crear` | Crear reclamo: categoría, descripción, selección en mapa y foto/video |
 | `#/enviado/:id` | Reclamo enviado con N° de reclamo y fecha |
@@ -56,7 +57,7 @@ de respaldo** con los barrios del partido, para que nunca quede en blanco.
 | `#/notificaciones` | Notificaciones y novedades |
 | `#/municipio` | Introducción institucional del Municipio |
 | `#/municipal` | Panel municipal: estado, verificación, evidencia y respuesta |
-| `#/mapa` | Mapa real de Vicente López con un pin por reclamo (color + ícono de categoría) |
+| `#/mapa` | Mapa de Vicente López con tarjetas, agrupamiento, zoom y filtros |
 | `#/estadisticas` | KPIs, categorías, evolución mensual y barrios |
 | `#/peticiones` | Peticiones colectivas (≥ 100 apoyos) |
 
@@ -88,10 +89,9 @@ La Lucila, Olivos, Florida, Florida Oeste, Munro, Villa Martelli, Villa Adelina 
 
 ## Datos y cuenta
 
-- **No hay reclamos precargados**: la plataforma arranca de cero.
-- Login demo: cualquier email + contraseña (mín. 4 caracteres). También con los botones sociales.
+- Acceso local: cualquier email + contraseña (mín. 4 caracteres). También con los botones sociales.
 - Los reclamos, apoyos, comentarios y notificaciones se guardan en `localStorage`.
-- Reiniciar todo (borra los reclamos locales y vuelve a cero):
+- Reiniciar todo (borra los reclamos locales y vuelve a cargar los reclamos iniciales):
 
 ```js
 localStorage.removeItem("avisar_vl_v2");
@@ -108,3 +108,18 @@ location.reload();
 ## Nota
 
 El diseño se construyó a partir del **brief** y del **flujo + wireframes** (texto extraído del PDF). El modelo no puede recibir PDF/imágenes directamente, pero el contenido se recuperó extrayendo el texto.
+
+## Créditos de las fotos de referencia
+
+- [Pothole in an asphalt pavement.jpg](https://commons.wikimedia.org/wiki/File:Pothole_in_an_asphalt_pavement.jpg) · Frankie Fouganthin · [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/)
+- [Damaged footpath in India.jpg](https://commons.wikimedia.org/wiki/File:Damaged_footpath_in_India.jpg) · Vendor on Robolow Universe · [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)
+- [Small HPS street lamp.jpg](https://commons.wikimedia.org/wiki/File:Small_HPS_street_lamp.jpg) · Bidgee · [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/)
+- [Paper recycling bin overflows.jpg](https://commons.wikimedia.org/wiki/File:Paper_recycling_bin_overflows.jpg) · Kotivalo · [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/)
+- [Fallen trees blocking footpath - geograph.org.uk - 5305995.jpg](https://commons.wikimedia.org/wiki/File:Fallen_trees_blocking_footpath_-_geograph.org.uk_-_5305995.jpg) · Evelyn Simak · [CC BY-SA 2.0](https://creativecommons.org/licenses/by-sa/2.0/)
+- [Storm Drain Clogged - Mid-City New Orleans.jpg](https://commons.wikimedia.org/wiki/File:Storm_Drain_Clogged_-_Mid-City_New_Orleans.jpg) · Bart Everson · [CC BY 2.0](https://creativecommons.org/licenses/by/2.0/)
+- [Pedestrian (Zebra) Crossing, Quarry Hill - geograph.org.uk - 1583524.jpg](https://commons.wikimedia.org/wiki/File:Pedestrian_%28Zebra%29_Crossing%2C_Quarry_Hill_-_geograph.org.uk_-_1583524.jpg) · Nigel Chadwick · [CC BY-SA 2.0](https://creativecommons.org/licenses/by-sa/2.0/)
+- [Damaged Fence - geograph.org.uk - 1803886.jpg](https://commons.wikimedia.org/wiki/File:Damaged_Fence_-_geograph.org.uk_-_1803886.jpg) · Anne Burgess · [CC BY-SA 2.0](https://creativecommons.org/licenses/by-sa/2.0/)
+- [Broken bench Briant Pond Park Summit NJ 2009.jpg](https://commons.wikimedia.org/wiki/File:Broken_bench_Briant_Pond_Park_Summit_NJ_2009.jpg) · Tomwsulcer · [Dominio público](https://commons.wikimedia.org/wiki/File:Broken_bench_Briant_Pond_Park_Summit_NJ_2009.jpg)
+- [Dripping Faucet.JPG](https://commons.wikimedia.org/wiki/File:Dripping_Faucet.JPG) · Angelsharum · [CC BY-SA 3.0](https://creativecommons.org/licenses/by-sa/3.0/)
+
+Las fotos se muestran con recorte de encuadre y algunas se redujeron para la web. Las fotografías son imágenes de archivo.

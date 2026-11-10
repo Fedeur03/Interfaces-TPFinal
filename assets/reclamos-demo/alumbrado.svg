@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 210">
+  <defs>
+    <linearGradient id="light" x2="1" y2="1"><stop stop-color="#fff8d6" stop-opacity=".24"/><stop offset="1" stop-color="#172533" stop-opacity=".24"/></linearGradient>
+    <filter id="grain"><feTurbulence type="fractalNoise" baseFrequency=".68" numOctaves="3" stitchTiles="stitch"/></filter>
+  </defs>
+  <path fill="#596e9b" d="M0 0h320v210H0z"/>
+  <circle cx="263" cy="44" r="14" fill="#ecdaac"/><path fill="#303e61" d="M0 114l49-34 36 31 46-31 72 41 46-34 71 28v95H0z"/><path fill="#253249" d="M0 151l320-19v78H0z"/><path d="M159 191V58q0-20 20-20h33" fill="none" stroke="#161d29" stroke-width="8"/><path fill="#e3a85c" d="M200 32h29l12 8-9 7h-29z"/><path d="M197 49h32" stroke="#5b605d" stroke-width="5"/><path d="M25 178h48m171-7h46" stroke="#7c8698" stroke-width="4" opacity=".45"/>
+  <path fill="url(#light)" d="M0 0h320v210H0z"/>
+  <path fill="#fff" opacity=".10" filter="url(#grain)" d="M0 0h320v210H0z"/>
+</svg>

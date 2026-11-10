@@ -5,14 +5,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="description" content="AvisAR — Plataforma municipal participativa de reclamos para los vecinos de Vicente López." />
   <title>AvisAR · Reclamos de Vicente López</title>
-  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="styles.css?v=dibujo-visible" />
 </head>
 <body>
   <a class="skip-link" href="#app">Saltar al contenido</a>
 
   <!-- ================= NAVBAR ================= -->
   <header class="topbar">
-    <button class="icon-btn menu-btn" id="menuToggle" aria-label="Abrir menú" aria-expanded="false">
+    <button class="icon-btn menu-btn" id="menuToggle" aria-label="Menú lateral" aria-controls="sidenav" aria-expanded="false">
       <span class="burger"><i></i><i></i><i></i></span>
     </button>
 
@@ -96,12 +96,8 @@
       </a>
     </nav>
 
-    <div class="snav-footer">
-      <button class="snav-collapse" id="collapseBtn" aria-label="Colapsar menú" title="Colapsar menú">
-        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
-        <span class="lbl">Colapsar</span>
-      </button>
-    </div>
+
+
   </aside>
 
   <div class="sidenav-backdrop" id="sidenavBackdrop"></div>
@@ -118,19 +114,21 @@
         </div>
         <div class="footer-links">
           <a href="#/reclamos">Explorar reclamos</a>
+          <a href="#/ver-reclamos">Ver reclamos</a>
+          <a href="#/preguntas">Preguntas frecuentes</a>
+          <a href="#/terminos">Términos y condiciones</a>
           <a href="#/peticiones">Peticiones colectivas</a>
           <a href="#/municipio">El Municipio</a>
           <a href="#/municipal">Panel municipal</a>
         </div>
-      </div>
-      <div class="container">
-        <p class="footer-note muted">Proyecto académico. No reemplaza los canales oficiales del municipio; los complementa.</p>
       </div>
     </footer>
   </div>
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-  <script src="app.js"></script>
+  <script src="demo-claims.js?v=transiciones"></script>
+  <script src="claim-map.js?v=gestion"></script>
+  <script src="app.js?v=dibujo-visible"></script>
 </body>
 </html>

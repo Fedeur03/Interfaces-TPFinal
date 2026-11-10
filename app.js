@@ -1,9 +1,4 @@
-/* =========================================================
-   AvisAR · Vicente López
-   Base vacía: no hay reclamos precargados.
-   El mapa real (imagen local de OpenStreetMap) muestra cada
-   reclamo con el ícono de su categoría en su coordenada.
-   ========================================================= */
+/* AvisAR · Vicente López */
 
 const STORE_KEY = "avisar_vl_v2";
 const THRESHOLD = 100;
@@ -14,6 +9,17 @@ const CATEGORIES = {
   alumbrado:       { label: "Alumbrado",       color: "#ca8a04", icon: "alumbrado" },
   limpieza:        { label: "Limpieza",        color: "#16a34a", icon: "limpieza" },
   transito:        { label: "Tránsito",        color: "#2563eb", icon: "transito" },
+};
+
+const REPORT_CATEGORIES = {
+  seguridad: CATEGORIES.seguridad,
+  infraestructura: { ...CATEGORIES.infraestructura, label: "Calles y veredas" },
+  alumbrado: CATEGORIES.alumbrado,
+  espacios_verdes: { label: "Espacios verdes", color: "#15803d", icon: "pin" },
+  desagues: { label: "Desagües e inundaciones", color: "#0369a1", icon: "pin" },
+  transito: { ...CATEGORIES.transito, label: "Señalización" },
+  limpieza: CATEGORIES.limpieza,
+  otro: { label: "Otro", color: "#64748b", icon: "pin" },
 };
 
 const ESTADOS = { abierto: "Abierto", en_proceso: "En proceso", resuelto: "Resuelto" };
@@ -95,15 +101,24 @@ function nearestBarrio(lat, lng) {
   return best;
 }
 
-/* ---------------- Estado (vacío) ---------------- */
+/* ---------------- Estado local ---------------- */
 function defaults() {
   return {
-    claims: [],
+    claims: makeDemoClaims(),
+    demoSeeded: true,
+
     supported: [],
     session: { logged: false, email: "", nombre: "" },
     notifications: [],
-    ui: { collapsed: false },
+    profiles: [],
   };
+}
+
+function normalizeProfile(profile) {
+  if (profile?.email === "vecino.demo@avisar.gob.ar" && profile.nombre === "Vecino Demo") {
+    return { ...profile, nombre: "Vecino" };
+  }
+  return profile;
 }
 
 function loadState() {
@@ -118,14 +133,19 @@ function loadState() {
             c.lat = b.lat; c.lng = b.lng;
           }
           if (!Array.isArray(c.comentarios)) c.comentarios = [];
+          if (c.demo) c.comentarios.forEach((entry) => {
+            if (entry.muni && entry.autor === "Municipio de Vicente López · Demo") entry.autor = "Municipio de Vicente López";
+          });
           if (!c.numero) c.numero = "F-" + (15300 + Math.floor(Math.random() * 700));
         });
         return {
-          claims: p.claims,
+          claims: p.demoSeeded ? p.claims : p.claims.concat(makeDemoClaims().filter((sample) => !p.claims.some((c) => c.id === sample.id))),
+          demoSeeded: true,
+
           supported: p.supported || [],
-          session: p.session || { logged: false, email: "", nombre: "" },
+          session: normalizeProfile(p.session) || { logged: false, email: "", nombre: "" },
           notifications: Array.isArray(p.notifications) ? p.notifications : [],
-          ui: p.ui || { collapsed: false },
+          profiles: Array.isArray(p.profiles) ? p.profiles.map(normalizeProfile) : [],
         };
       }
     }
@@ -136,7 +156,7 @@ function loadState() {
 let state = loadState();
 let draftLatLng = { lat: VL_CENTER[0], lng: VL_CENTER[1] };
 let draftBarrio = nearestBarrio(draftLatLng.lat, draftLatLng.lng);
-let draftCat = "infraestructura";
+let draftCat = "";
 let draftPicked = false;
 
 function save() { try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch (e) { /* ignore */ } }
@@ -152,7 +172,7 @@ function fmtDate(iso) {
   if (isNaN(d)) return iso;
   return `${d.getDate()} ${MESES[d.getMonth()]} ${d.getFullYear()}`;
 }
-function catMeta(key) { return CATEGORIES[key] || { label: key, color: "#64748b", icon: "pin" }; }
+function catMeta(key) { return REPORT_CATEGORIES[key] || { label: key, color: "#64748b", icon: "pin" }; }
 function catChip(key) { const c = catMeta(key); return `<span class="chip" style="--c:${c.color}"><span class="sw"></span>${esc(c.label)}</span>`; }
 function statusBadge(e) { return `<span class="badge badge-${e}">${ESTADOS[e] || e}</span>`; }
 function initials(name) {
@@ -162,7 +182,8 @@ function initials(name) {
 
 function claimCard(c) {
   const cat = catMeta(c.categoria);
-  const media = c.foto ? `<img class="media-img" src="${c.foto}" alt="">` : `<span class="big-ic">${icon(cat.icon, 52, 1.7)}</span>`;
+  const photo = claimPhoto(c);
+  const media = photo && !photo.startsWith("data:video/") ? `<img class="media-img" src="${esc(photo)}" alt="" loading="lazy">` : `<span class="big-ic">${icon(cat.icon, 52, 1.7)}</span>`;
   return `
     <a class="claim-card" href="#/reclamo/${c.id}">
       <div class="claim-photo" style="--c:${cat.color}">${media}</div>
@@ -179,11 +200,11 @@ function claimCard(c) {
     </a>`;
 }
 
-function mapLegend() {
-  return Object.entries(CATEGORIES).map(([k, c]) => `<span><i style="background:${c.color}"></i>${c.label}</span>`).join("");
+function mapLegend(categories = CATEGORIES) {
+  return Object.entries(categories).map(([k, c]) => `<span><i style="background:${c.color}"></i>${c.label}</span>`).join("");
 }
 
-/* ---------------- Mapa real estático (imagen local de OpenStreetMap) ---------------- */
+/* ---------------- Mapa interactivo ---------------- */
 function pinSVG(catKey, size = 30) {
   const c = catMeta(catKey);
   const h = Math.round(size * 1.3125);
@@ -193,16 +214,11 @@ function pinSVG(catKey, size = 30) {
   </svg>`;
 }
 
-function mapPin(c) {
-  const p = latlngToPct(c.lat, c.lng);
-  return `<a class="map-pin" href="#/reclamo/${c.id}" style="left:${p.x.toFixed(3)}%;top:${p.y.toFixed(3)}%" title="${esc(c.titulo)} · ${esc(c.barrio)}">
-    ${pinSVG(c.categoria)}
-  </a>`;
-}
+
 
 function draftPin() {
   const p = latlngToPct(draftLatLng.lat, draftLatLng.lng);
-  return `<span class="map-pin is-draft" id="draftPin" style="left:${p.x.toFixed(3)}%;top:${p.y.toFixed(3)}%">
+  return `<span class="map-pin is-draft" id="draftPin" ${draftPicked ? "" : "hidden"} style="left:${p.x.toFixed(3)}%;top:${p.y.toFixed(3)}%">
     ${pinSVG(draftCat)}
   </span>`;
 }
@@ -214,16 +230,37 @@ function barrioTags() {
   }).join("");
 }
 
-function staticMap(claims, opts = {}) {
-  const { labels = true, pick = false, cls = "" } = opts;
-  const pins = pick ? draftPin() : claims.map(mapPin).join("");
-  return `<div class="static-map ${cls}" ${pick ? 'id="pickMap" data-action="pick-map"' : ""}>
-    <img class="static-map-img" src="${MAP_SRC}" alt="Mapa de Vicente López" draggable="false" />
-    <span class="map-tint" aria-hidden="true"></span>
-    ${labels ? `<span class="map-labels" aria-hidden="true">${barrioTags()}</span>` : ""}
-    <span class="map-pins">${pins}</span>
+const mapConfigs = [];
+const liveMaps = [];
+
+function reportMap(claims, { labels = true, pick = false, focus, cls = "" } = {}) {
+  const index = mapConfigs.push({ claims, focus, pick: pick ? selectMapLocation : null }) - 1;
+  const hint = pick ? "Marcá la ubicación con un clic o con Enter en el centro del mapa."
+    : "Acercate con los botones o la rueda. Arrastrá para recorrer el mapa.";
+  return `<div class="static-map claim-map ${cls} ${pick ? "is-picker" : ""} ${focus ? "is-zoomed" : ""}" data-claim-map="${index}" ${pick ? 'id="pickMap"' : ""} tabindex="0" role="region" aria-label="Mapa interactivo de Vicente López" aria-describedby="mapHint-${index}">
+    <div class="map-world">
+      <img class="static-map-img" src="${MAP_SRC}" alt="" draggable="false">
+      <span class="map-tint" aria-hidden="true"></span>
+      ${labels ? `<span class="map-labels" aria-hidden="true">${barrioTags()}</span>` : ""}
+      ${pick ? draftPin() : ""}
+    </div>
+    <div class="map-pins"></div>
+    <div class="map-controls" role="group" aria-label="Controles del mapa">
+      <button type="button" data-map-control="in" aria-label="Acercar mapa" title="Acercar">+</button>
+      <button type="button" data-map-control="out" aria-label="Alejar mapa" title="Alejar">−</button>
+      <button type="button" data-map-control="reset" aria-label="Volver al mapa completo" title="Mapa completo">${icon("crosshair", 17)}</button>
+    </div>
+    <div class="map-hud"><span class="map-level" aria-label="Nivel de zoom">1×</span><span id="mapHint-${index}">${hint}</span></div>
+    <div class="map-group-results" hidden></div>
     <span class="map-credit">© OpenStreetMap</span>
   </div>`;
+}
+
+function selectMapLocation({ lat, lng }) {
+  draftLatLng = { lat, lng };
+  draftBarrio = nearestBarrio(lat, lng);
+  draftPicked = true;
+  document.getElementById("draftBarrio").innerHTML = `Ubicación elegida: <strong>${esc(draftBarrio)}</strong> · ${lat.toFixed(5)}, ${lng.toFixed(5)}`;
 }
 
 /* ---------------- Shell ---------------- */
@@ -237,7 +274,7 @@ function updateShell(view) {
       ua.innerHTML = `<a class="btn btn-ghost btn-sm" href="#/login">Ingresar</a><a class="btn btn-primary btn-sm" href="#/registro">Registrarse</a>`;
     }
   }
-  const unread = state.notifications.filter((n) => !n.leida).length;
+  const unread = accountNotifications().filter((n) => !n.leida).length;
   const dot = document.getElementById("notifDot");
   if (dot) dot.hidden = unread === 0;
   const activeMap = { reclamo: "reclamos", enviado: "crear" };
@@ -267,18 +304,18 @@ function renderHome() {
       <div class="container home-hero-grid">
         <div class="home-hero-text">
           <span class="eyebrow">${icon("pin", 15)} Vicente López · Participación ciudadana</span>
-          <h1>Los problemas de tu barrio, <span class="hl">a la vista de todos</span>.</h1>
-          <p class="lead">Creá un reclamo, ubicalo en el mapa del municipio y seguí su estado. Todo lo que reportan los vecinos queda visible en un solo lugar.</p>
+          <h1>¿Qué pasa en <span class="hl">tu barrio</span>?</h1>
+          <p class="lead">Si hay una luminaria apagada, un bache o algo que dificulta el paso, marcá el lugar en el mapa. Podés seguir tu reclamo y apoyar el de otro vecino.</p>
           <div class="hero-actions">
             <a class="btn btn-primary" href="#/crear">${icon("plus", 18)} Crear reclamo</a>
-            <a class="btn btn-ghost" href="#/reclamos">${icon("search", 17)} Ver reclamos</a>
+            <a class="btn btn-ghost" href="#/ver-reclamos">${icon("search", 17)} Ver reclamos</a>
           </div>
         </div>
         <div class="home-map-col">
           <div class="map-card home-map-card">
-            ${staticMap(state.claims, { labels: true, cls: "home-map" })}
+            ${reportMap(claims, { cls: "home-map" })}
             ${total === 0 ? `<div class="map-empty"><div class="me-card"><span class="me-ic">${icon("pin", 24)}</span><strong>Todavía no hay reclamos</strong><p>Cuando los vecinos publiquen, van a aparecer en el mapa con el ícono de su categoría y su ubicación.</p><a class="btn btn-primary btn-sm" href="#/crear">${icon("plus", 15)} Crear el primero</a></div></div>` : ""}
-            <div class="map-legend">${mapLegend()}</div>
+            <div class="map-legend">${mapLegend(REPORT_CATEGORIES)}</div>
           </div>
           <p class="map-caption">${icon("crosshair", 14)} ${total} ${total === 1 ? "reclamo ubicado" : "reclamos ubicados"} en el partido de Vicente López</p>
         </div>
@@ -297,7 +334,7 @@ function renderHome() {
 
     <section class="section" style="padding-top:0">
       <div class="container">
-        <div class="section-head"><div><h2>Explorá por categoría</h2><p>Cinco tipos de problemas relevados en el partido.</p></div><a class="btn btn-ghost btn-sm" href="#/reclamos">Ver todos</a></div>
+        <div class="section-head"><div><h2>Explorá por categoría</h2><p>Encontrá los reclamos que más te interesan.</p></div><a class="btn btn-ghost btn-sm" href="#/reclamos">Ver todos</a></div>
         <div class="cat-grid">${Object.entries(CATEGORIES).map(([key, c]) => {
           const n = claims.filter((x) => x.categoria === key).length;
           return `<a class="cat-card" href="#/reclamos?cat=${key}" style="--c:${c.color}"><span class="ic">${icon(c.icon, 20)}</span><span class="name">${c.label}</span><span class="count">${n} ${n === 1 ? "reclamo" : "reclamos"}</span></a>`;
@@ -318,7 +355,7 @@ function renderHome() {
 
     <section class="section" style="padding-top:0">
       <div class="container">
-        <div class="section-head"><div><h2>Últimos reclamos</h2><p>Lo que los vecinos reportaron recientemente.</p></div>${total ? `<a class="btn btn-ghost btn-sm" href="#/reclamos">Ver todos →</a>` : ""}</div>
+        <div class="section-head"><div><h2>Últimos reclamos</h2><p>Lo que los vecinos reportaron recientemente.</p></div>${total ? `<a class="btn btn-ghost btn-sm" href="#/ver-reclamos">Ver todos →</a>` : ""}</div>
         ${total ? `<div class="claim-grid">${ultimos.map(claimCard).join("")}</div>` : `<div class="empty"><p style="font-weight:700;color:var(--ink);margin:0 0 6px">Todavía no hay reclamos</p><p style="margin:0 0 14px">Sé el primero en reportar un problema de tu barrio.</p><a class="btn btn-primary" href="#/crear">${icon("plus", 16)} Crear reclamo</a></div>`}
       </div>
     </section>
@@ -348,9 +385,9 @@ function renderReclamos() {
   const cat = params.get("cat") || "todos";
   const estado = params.get("estado") || "todos";
   const list = filteredClaims();
-  const catOpts = Object.entries(CATEGORIES).map(([k, c]) => `<option value="${k}" ${cat === k ? "selected" : ""}>${c.label}</option>`).join("");
-  const chips = [["todos", "Todas", "#0f766e"]].concat(Object.entries(CATEGORIES).map(([k, c]) => [k, c.label, c.color]))
-    .map(([k, label, color]) => `<a class="chipbtn ${cat === k ? "is-active" : ""}" style="--c:${color}" href="${reclamosURL({ cat: k === "todos" ? "" : k })}"><span class="sw"></span>${label}</a>`).join("");
+  const { page, count, navigation } = claimPagination(list, "reclamos", params);
+  const hasFilters = ["cat", "estado", "q"].some((key) => params.has(key));
+  const catOpts = Object.entries(REPORT_CATEGORIES).map(([k, c]) => `<option value="${k}" ${cat === k ? "selected" : ""}>${c.label}</option>`).join("");
 
   return `
     <section class="section"><div class="container">
@@ -369,19 +406,67 @@ function renderReclamos() {
           <button class="btn btn-primary btn-block" type="submit">${icon("search", 16)} Aplicar filtros</button>
         </form>
         <div>
-          <div class="chipbar" style="margin-bottom:16px">${chips}</div>
-          <div class="results-head"><span class="count">${list.length} ${list.length === 1 ? "resultado" : "resultados"}</span>${params.toString() ? `<a class="muted" style="font-size:.84rem" href="#/reclamos">Limpiar filtros</a>` : ""}</div>
-          ${list.length ? `<div class="claim-grid">${list.map(claimCard).join("")}</div>` : `<div class="empty"><p style="font-weight:700;color:var(--ink);margin:0 0 6px">Todavía no hay reclamos</p><p style="margin:0 0 14px">Cuando los vecinos publiquen, van a aparecer acá.</p><a class="btn btn-primary" href="#/crear">${icon("plus", 16)} Crear el primero</a></div>`}
+          <div class="map-card explore-results-map">${reportMap(list, { cls: "explore-map" })}</div>
+          <div class="results-head"><h3 id="claim-results" class="results-title" tabindex="-1">Resultados</h3>${hasFilters ? `<a class="muted" style="font-size:.84rem" href="#/reclamos">Limpiar filtros</a>` : ""}</div>
+          ${page.length ? `<p class="page-count" role="status">${count}</p><div class="claim-list">${page.map((c) => claimRow(c, { thumbnail: true, status: true })).join("")}</div>${navigation}` : `<div class="empty"><p style="font-weight:700;color:var(--ink);margin:0 0 6px">${state.claims.length ? "No hay reclamos que coincidan" : "Todavía no hay reclamos"}</p><p style="margin:0 0 14px">${state.claims.length ? "Probá con otros filtros." : "Cuando los vecinos publiquen, van a aparecer acá."}</p><a class="btn btn-primary" href="#/crear">${icon("plus", 16)} Crear el primero</a></div>`}
         </div>
       </div>
     </div></section>`;
 }
 
-function reclamosURL(overrides) {
-  const { params } = getRoute();
-  const p = new URLSearchParams(params);
-  Object.entries(overrides).forEach(([k, v]) => { if (v) p.set(k, v); else p.delete(k); });
-  return "#/reclamos" + (p.toString() ? "?" + p.toString() : "");
+function claimRow(c, { thumbnail = false, status = false } = {}) {
+  const cat = catMeta(c.categoria);
+  const photo = claimPhoto(c);
+  const image = photo && !photo.startsWith("data:video/");
+  return `<article class="claim-row">
+    ${thumbnail ? `<div class="claim-thumb" style="--c:${cat.color}">${image ? `<img src="${esc(photo)}" alt="" loading="lazy">` : icon(cat.icon, 26)}</div>` : ""}
+    <div class="claim-row-body">
+      <h2>${esc(c.titulo)}</h2>
+      <p class="muted">${esc(cat.label)} · ${esc(c.barrio)} · ${fmtDate(c.fecha)} · #${esc(c.numero)}</p>
+      <p class="claim-summary">${esc(c.descripcion)}</p>
+    </div>
+    <div class="claim-row-actions">${status ? statusBadge(c.estado) : ""}<a href="#/reclamo/${esc(c.id)}">Ver detalle →</a></div>
+  </article>`;
+}
+
+function claimPagination(claims, route, params) {
+  const perPage = 10;
+  const last = Math.max(1, Math.ceil(claims.length / perPage));
+  const requested = Number(params.get("pagina"));
+  const current = clamp(Number.isSafeInteger(requested) ? requested : 1, 1, last);
+  const start = (current - 1) * perPage;
+  const page = claims.slice(start, start + perPage);
+  const url = (number) => {
+    const query = new URLSearchParams(params);
+    if (number === 1) query.delete("pagina");
+    else query.set("pagina", number);
+    return `#/${route}${query.size ? "?" + query : ""}`;
+  };
+  const numberedLinks = Array.from({ length: last }, (_, i) => i + 1).map((number) => {
+    if (number === current) return `<span class="page-link is-current" aria-current="page">${number}</span>`;
+    if (number === 1 || number === last || Math.abs(number - current) <= 1) return `<a class="page-link" href="${url(number)}" aria-label="Página ${number}">${number}</a>`;
+    if (Math.abs(number - current) === 2) return '<span class="page-ellipsis" aria-hidden="true">…</span>';
+    return "";
+  }).join("");
+  const count = `Mostrando ${start + 1}–${start + page.length} de ${claims.length} ${claims.length === 1 ? "reclamo" : "reclamos"}`;
+  const navigation = last > 1 ? `<nav class="claim-pagination" aria-label="Páginas de reclamos">
+    ${current > 1 ? `<a class="page-link page-step" href="${url(current - 1)}" rel="prev">‹ Anterior</a>` : '<span class="page-link page-step" aria-disabled="true">‹ Anterior</span>'}
+    <div class="page-numbers">${numberedLinks}</div>
+    ${current < last ? `<a class="page-link page-step" href="${url(current + 1)}" rel="next">Siguiente ›</a>` : '<span class="page-link page-step" aria-disabled="true">Siguiente ›</span>'}
+  </nav>` : "";
+  return { page, count, navigation };
+}
+
+function renderVerReclamos() {
+  const claims = state.claims.slice().sort((a, b) => b.fecha.localeCompare(a.fecha));
+  const { page, count, navigation } = claimPagination(claims, "ver-reclamos", getRoute().params);
+  return `<section class="section"><div class="container">
+    <div class="section-head"><div><h2 id="claim-results" tabindex="-1">Ver reclamos</h2><p>Reclamos hechos por vecinos.</p></div>
+      <a class="btn btn-ghost" href="#/reclamos">${icon("search", 17)} Explorar y filtrar</a>
+    </div>
+    ${page.length ? `<p class="page-count" role="status">${count}</p><div class="claim-list">${page.map((c) => claimRow(c)).join("")}</div>` : `<div class="empty"><p>Todavía no hay reclamos publicados.</p><a class="btn btn-primary" href="#/crear">Crear reclamo</a></div>`}
+    ${navigation}
+  </div></section>`;
 }
 
 function renderReclamo(id) {
@@ -392,8 +477,13 @@ function renderReclamo(id) {
   const supported = state.supported.includes(c.id);
   const pct = Math.min(100, Math.round((c.apoyos / THRESHOLD) * 100));
   const ready = c.apoyos >= THRESHOLD;
-  const media = c.foto ? `<img class="media-img" src="${c.foto}" alt="">` : icon(cat.icon, 64, 1.6);
-  const news = state.notifications.slice(0, 3);
+  const reference = referencePhoto(c);
+  const photo = reference?.src || c.foto;
+  const media = photo?.startsWith("data:video/")
+    ? `<video class="media-img" src="${esc(photo)}" controls preload="metadata" aria-label="Video del reclamo"></video>`
+    : photo ? `<img class="media-img" src="${esc(photo)}" alt="${esc(reference?.label || "Foto del reclamo")}">` : icon(cat.icon, 64, 1.6);
+  const credit = reference ? `<p class="reference-credit">Imagen de archivo · <a href="${reference.source}">${esc(reference.author)}</a> · <a href="${reference.licenseUrl}">${reference.license}</a></p>` : "";
+  const news = c.comentarios.filter((m) => m.muni).slice(-3).reverse();
   const comments = c.comentarios.length ? c.comentarios.map((m) => `
     <div class="comment"><div class="avatar ${m.muni ? "muni" : ""}">${m.muni ? icon("building", 18) : esc((m.autor || "V").slice(0, 1).toUpperCase())}</div>
     <div><div class="who">${esc(m.autor)} ${m.muni ? '<span class="badge badge-verified">Oficial</span>' : ""} <span class="when">${fmtDate(m.fecha)}</span></div><p>${esc(m.texto)}</p></div></div>`).join("") : `<p class="muted" style="font-size:.88rem">Todavía no hay comentarios.</p>`;
@@ -404,7 +494,6 @@ function renderReclamo(id) {
       <div class="detail-grid">
         <div>
           <div class="panel panel-pad">
-            <div class="media-frame" style="--c:${cat.color}">${media}</div>
             <div style="display:flex;gap:8px;flex-wrap:wrap">${catChip(c.categoria)}${statusBadge(c.estado)}${c.verificado ? '<span class="badge badge-verified">' + icon("check", 13) + " Verificado</span>" : ""}</div>
             <h1 class="detail-title">${esc(c.titulo)}</h1>
             <div class="detail-meta">
@@ -412,20 +501,38 @@ function renderReclamo(id) {
               <span style="display:inline-flex;align-items:center;gap:6px">${icon("pin", 16)} ${esc(c.direccion)}</span>
               <span style="display:inline-flex;align-items:center;gap:6px">${icon("doc", 16)} N° ${esc(c.numero || "")}</span>
             </div>
-            <p class="detail-desc">${esc(c.descripcion)}</p>
+            <div class="claim-detail-intro">
+              <div><div class="media-frame" style="--c:${cat.color}">${media}</div>${credit}</div>
+              <div><h2>Descripción</h2><p class="detail-desc">${esc(c.descripcion)}</p>
+                <div class="support-box">
+                  <div class="big">${c.apoyos}</div><div class="lbl">apoyos de vecinos</div>
+                  <button class="btn ${supported ? "btn-ghost" : "btn-accent"} btn-block" data-action="support" data-id="${c.id}" ${supported ? "disabled" : ""}>${icon("support", 18)} ${supported ? "Ya apoyaste" : "Apoyar este reclamo"}</button>
+                  <div style="width:100%;margin-top:4px"><div class="progress"><i style="width:${pct}%"></i></div><div style="display:flex;justify-content:space-between;font-size:.75rem;color:var(--muted);margin-top:6px"><span>${ready ? "Meta alcanzada" : "Petición colectiva"}</span><span>${c.apoyos}/${THRESHOLD}</span></div></div>
+                  ${ready ? `<a class="btn btn-primary btn-block" href="#/peticiones">${icon("doc", 17)} Ver petición colectiva</a>` : `<p class="muted" style="font-size:.77rem;margin:0">Faltan ${THRESHOLD - c.apoyos} apoyos para la carta pública.</p>`}
+                </div>
+              </div>
+            </div>
             <div class="divider"></div>
             <h3 style="margin:0 0 14px;font-size:1rem">Estado del problema</h3>
             <div class="state-compare">
               <div class="state-box"><div class="st-label">Estado reportado</div><div class="st-value">${icon("users", 17)} Reportado por vecinos</div><p>Publicado el ${fmtDate(c.fecha)} · ${c.apoyos} apoyos comunitarios.</p></div>
-              <div class="state-box official"><div class="st-label">Estado actual · Municipio</div><div class="st-value">${statusBadge(c.estado)} ${c.verificado ? "Verificado" : ""}</div><p>${c.evidencia ? esc(c.evidencia) : "El municipio todavía no informó una solución con evidencia."}</p></div>
+              <div class="state-box official"><div class="st-label">Estado actual · Municipio</div><div class="st-value">${statusBadge(c.estado)} ${c.verificado ? "Verificado" : ""}</div><p>${c.evidenciaFoto ? "Parte de intervención y registro visual disponibles." : c.evidencia ? esc(c.evidencia) : "El municipio todavía no informó una solución con evidencia."}</p></div>
             </div>
+            ${c.estado === "resuelto" && c.evidenciaFoto ? `<div class="resolution-evidence">
+              <div><span class="eyebrow">${icon("check", 14)} Intervención finalizada</span>
+                <h3>Evidencia municipal</h3>
+                ${c.fechaResolucion ? `<p class="muted">Resolución registrada el ${fmtDate(c.fechaResolucion)}.</p>` : ""}
+                <p>${esc(c.evidencia)}</p>
+              </div>
+              <figure><img src="${esc(c.evidenciaFoto)}" alt="Ilustración de la intervención" loading="lazy"><figcaption>Ilustración de la intervención</figcaption></figure>
+            </div>` : ""}
             <div class="divider"></div>
             <h3 style="margin:0 0 14px;font-size:1rem">Seguimiento</h3>
             <ul class="timeline">
               <li class="done"><div class="t">Reclamo publicado</div><div class="d">${fmtDate(c.fecha)}</div></li>
               <li class="${c.verificado ? "done" : ""}"><div class="t">Verificado por el municipio</div><div class="d">${c.verificado ? "Información validada" : "Pendiente"}</div></li>
               <li class="${c.estado !== "abierto" ? "done" : ""}"><div class="t">En proceso</div><div class="d">${c.estado !== "abierto" ? "El municipio está interviniendo" : "Aún no iniciado"}</div></li>
-              <li class="${c.estado === "resuelto" ? "done" : ""}"><div class="t">Resuelto con evidencia</div><div class="d">${c.estado === "resuelto" ? "Solución verificada" : "Pendiente"}</div></li>
+              <li class="${c.estado === "resuelto" ? "done" : ""}"><div class="t">Resuelto con evidencia</div><div class="d">${c.estado === "resuelto" ? (c.fechaResolucion ? fmtDate(c.fechaResolucion) : "Solución verificada") : "Pendiente"}</div></li>
             </ul>
           </div>
 
@@ -433,24 +540,19 @@ function renderReclamo(id) {
             <h3 style="margin:0 0 8px;font-size:1rem">Comentarios de la comunidad</h3>
             ${comments}
             <form data-form="comment" data-id="${c.id}" style="margin-top:16px;display:flex;flex-direction:column;gap:10px">
-              <textarea class="textarea" name="texto" placeholder="Escribí tu comentario…" required style="min-height:84px"></textarea>
+              <textarea class="textarea" name="texto" aria-label="Escribí tu comentario" placeholder="Escribí tu comentario…" required style="min-height:84px"></textarea>
               <button class="btn btn-primary" type="submit" style="align-self:flex-start">Comentar</button>
             </form>
           </div>
         </div>
 
         <aside style="display:flex;flex-direction:column;gap:16px">
-          <div class="support-box">
-            <div class="big">${c.apoyos}</div><div class="lbl">apoyos de vecinos</div>
-            <button class="btn ${supported ? "btn-ghost" : "btn-accent"} btn-block" data-action="support" data-id="${c.id}" ${supported ? "disabled" : ""}>${icon("support", 18)} ${supported ? "Ya apoyaste" : "Apoyar este reclamo"}</button>
-            <div style="width:100%;margin-top:4px"><div class="progress"><i style="width:${pct}%"></i></div><div style="display:flex;justify-content:space-between;font-size:.75rem;color:var(--muted);margin-top:6px"><span>${ready ? "Meta alcanzada" : "Petición colectiva"}</span><span>${c.apoyos}/${THRESHOLD}</span></div></div>
-            ${ready ? `<a class="btn btn-primary btn-block" href="#/peticiones">${icon("doc", 17)} Ver petición colectiva</a>` : `<p class="muted" style="font-size:.77rem;margin:0">Faltan ${THRESHOLD - c.apoyos} apoyos para la carta pública.</p>`}
-          </div>
 
-          <div class="panel panel-pad"><h3 style="margin:0 0 10px;font-size:.95rem">Ubicación</h3><div class="map-card map-card-detail">${staticMap([c], { labels: false, cls: "detail-map" })}</div><p class="muted" style="font-size:.8rem;margin:10px 0 0">${esc(c.barrio)} · ${c.lat.toFixed(5)}, ${c.lng.toFixed(5)}</p></div>
+
+          <div class="panel panel-pad"><h3 style="margin:0 0 10px;font-size:.95rem">Ubicación</h3><div class="map-card map-card-detail">${reportMap([c, ...state.claims.filter((claim) => claim.id !== c.id)], { focus: c, labels: false, cls: "detail-map" })}</div><p class="muted" style="font-size:.8rem;margin:10px 0 0">${esc(c.barrio)} · ${c.lat.toFixed(5)}, ${c.lng.toFixed(5)}</p></div>
 
           <div class="panel panel-pad"><h3 style="margin:0 0 12px;font-size:.95rem">Noticias y novedades</h3>
-            ${news.length ? `<div class="aside-news">${news.map((n) => `<a class="news-item" href="${n.ref ? "#/reclamo/" + n.ref : "#/notificaciones"}"><span class="dot"></span><div><div class="nt">${esc(n.titulo)}</div><div class="nd">${fmtDate(n.fecha)}</div></div></a>`).join("")}</div>` : `<p class="muted" style="font-size:.84rem;margin:0">No hay novedades por ahora.</p>`}
+                        ${news.length ? `<div class="aside-news">${news.map((m) => `<div class="news-item"><span class="dot"></span><div><div class="nt">${esc(m.texto)}</div><div class="nd">${fmtDate(m.fecha)}</div></div></div>`).join("")}</div>` : `<p class="muted" style="font-size:.84rem;margin:0">No hay novedades por ahora.</p>`}
           </div>
         </aside>
       </div>
@@ -459,181 +561,258 @@ function renderReclamo(id) {
 
 function renderCrear() {
   if (!state.session.logged) return authGate("Iniciá sesión para crear un reclamo", "Necesitás una cuenta vecinal para publicar, comentar y apoyar reclamos.");
-  const opts = Object.entries(CATEGORIES).map(([k, c]) => `<option value="${k}" ${k === draftCat ? "selected" : ""}>${c.label}</option>`).join("");
-  return `
-    <section class="section"><div class="container"><div class="form-panel">
-      <span class="eyebrow">${icon("plus", 15)} Nuevo reclamo</span>
-      <h2 style="margin:12px 0 6px;letter-spacing:-.02em">Crear reclamo</h2>
-      <p class="muted" style="margin:0 0 20px">Elegí la categoría, describí el problema y marcá la ubicación exacta en el mapa.</p>
-      <form class="panel panel-pad" data-form="crear">
-        <div class="field"><label for="categoria">Categoría</label><select class="input" id="categoria" name="categoria">${opts}</select></div>
-        <div class="field"><label for="descripcion">Descripción del problema</label><span class="hint">Contá qué pasa, desde cuándo y a quién afecta.</span><textarea class="textarea" id="descripcion" name="descripcion" required minlength="20" placeholder="Contanos el problema…"></textarea></div>
-        <div class="field">
-          <label>Seleccioná en el mapa</label>
-          <span class="hint">Hacé clic sobre el mapa para marcar el lugar exacto del reclamo.</span>
-          <div class="map-card map-card-pick">${staticMap([], { labels: true, pick: true, cls: "pick-map" })}</div>
-          <p class="hint" id="draftBarrio" style="margin-top:8px">${draftPicked ? `Ubicación elegida: <strong>${esc(draftBarrio)}</strong> · ${draftLatLng.lat.toFixed(5)}, ${draftLatLng.lng.toFixed(5)}` : "Todavía no marcaste la ubicación en el mapa."}</p>
+  const opts = Object.entries(REPORT_CATEGORIES).map(([k, c]) => `<option value="${k}" ${k === draftCat ? "selected" : ""}>${c.label}</option>`).join("");
+  return `<section class="section"><div class="container">
+    <div class="section-head"><div><span class="eyebrow">${icon("plus", 15)} Nuevo reclamo</span>
+      <h2>Subí tu reclamo</h2><p>Contanos qué pasa y marcá la ubicación exacta.</p></div></div>
+    <form class="create-grid" data-form="crear">
+      <div class="panel panel-pad">
+        <div class="field"><label for="categoria">Categoría</label><select class="input" id="categoria" name="categoria" required><option value="">Seleccioná una categoría</option>${opts}</select></div>
+        <div class="field"><label for="descripcion">Descripción del problema</label><textarea class="textarea" id="descripcion" name="descripcion" required minlength="20" placeholder="Contanos el problema…"></textarea></div>
+        <div class="field"><label for="foto">Adjuntá foto o video</label>
+          <label class="upload-box" for="foto"><span class="uic">${icon("camera", 28)}</span><strong>Elegí un archivo</strong><span class="hint" id="uploadName">Imagen o video · Hasta 1,2 MB · Opcional</span><input id="foto" name="foto" type="file" accept="image/*,video/*"></label>
         </div>
-        <div class="field">
-          <label>Adjuntá foto o video</label>
-          <label class="upload-box" for="foto"><span class="uic">${icon("camera", 30)}</span><div><strong>Subí tu archivo</strong></div><div class="hint">JPG, PNG o MP4 · opcional</div><input id="foto" name="foto" type="file" accept="image/*,video/*" /></label>
+      </div>
+      <div class="panel panel-pad">
+        <div class="field"><h3>Seleccioná en el mapa</h3><span class="hint">Hacé clic para marcar el lugar del reclamo.</span>
+          <div class="map-card map-card-pick">${reportMap(state.claims, { pick: true, cls: "pick-map" })}</div>
+          <p class="hint" id="draftBarrio" aria-live="polite">${draftPicked ? `Ubicación elegida: <strong>${esc(draftBarrio)}</strong> · ${draftLatLng.lat.toFixed(5)}, ${draftLatLng.lng.toFixed(5)}` : "Todavía no marcaste la ubicación en el mapa."}</p>
         </div>
-        <button class="btn btn-primary" type="submit">${icon("upload", 17)} Enviar reclamo</button>
-      </form>
-    </div></div></section>`;
+        <button class="btn btn-primary btn-block" type="submit">${icon("upload", 17)} Enviar reclamo</button>
+      </div>
+    </form>
+  </div></section>`;
 }
 
 function renderEnviado(id) {
   const c = getClaim(id);
-  if (!c) return renderHome();
+  if (!c) return renderVerReclamos();
   return `
-    <section class="section"><div class="container"><div class="success-card">
-      <div class="success-badge">${icon("check", 38, 2.4)}</div>
+    <section class="section"><div class="container"><div class="success-card is-success-pending">
+      <div class="success-badge" aria-hidden="true"><span class="success-sparks"></span><svg viewBox="0 0 76 76" width="76" height="76" fill="none">
+        <circle class="success-track" cx="38" cy="38" r="31"/>
+        <circle class="success-ring" cx="38" cy="38" r="31" pathLength="100" transform="rotate(-90 38 38)"/>
+        <path class="success-tick" d="M24 39l10 10 19-22" pathLength="100"/>
+      </svg></div>
       <h1>¡Reclamo enviado con éxito!</h1>
-      <p class="muted">Tu reclamo ya está en el mapa y los vecinos pueden apoyarlo.</p>
-      <div class="ticket"><span>N° de reclamo</span><b>#${esc(c.numero)}</b><span>Fecha de envío: ${fmtDate(c.fecha)}</span></div>
+      <p class="muted" role="status">Tu reclamo ya está en el mapa y los vecinos pueden apoyarlo.</p>
+      <div class="ticket"><b>N° de reclamo #${esc(c.numero)}</b><span>Fecha de envío: ${fmtDate(c.fecha)}</span></div>
       <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap"><a class="btn btn-primary" href="#/reclamo/${c.id}">${icon("doc", 17)} Ver mi reclamo</a><a class="btn btn-ghost" href="#/">Volver al inicio</a></div>
     </div></div></section>`;
 }
 
+function socialOptions() {
+  return `<div class="social-row" aria-label="Opciones de acceso">
+    <button type="button" class="social-btn" data-action="demo-social"><span class="g" aria-hidden="true">G</span> Continuar con Google</button>
+    <button type="button" class="social-btn" data-action="demo-social"><span class="facebook-mark" aria-hidden="true">f</span> Continuar con Facebook</button>
+    <button type="button" class="social-btn" data-action="demo-social">Continuar con Apple</button>
+  </div>`;
+}
+
+function authLink(view) {
+  const next = getRoute().params.get("next");
+  return `#/${view}${next ? "?next=" + encodeURIComponent(next) : ""}`;
+}
+
 function renderRegistro() {
-  return `<section class="section"><div class="container"><div class="auth-wrap"><div class="auth-card">
-    <h1>Crear cuenta</h1><p class="sub">Sumate a AvisAR para publicar, apoyar y seguir reclamos.</p>
-    <div class="social-row">
-      <button type="button" class="social-btn" data-action="demo-social"><span class="g">G</span> Continuar con Google</button>
-      <button type="button" class="social-btn" data-action="demo-social"><span style="color:#1877f2;font-weight:800">f</span> Continuar con Facebook</button>
-      <button type="button" class="social-btn" data-action="demo-social"> Continuar con Apple</button>
+  return `<section class="section"><div class="container"><div class="auth-wrap register-wrap"><div class="auth-card">
+    <h1>Registrarse</h1><p class="sub">Creá tu cuenta vecinal para publicar, apoyar y seguir reclamos.</p>
+    <div class="register-grid">
+      <form data-form="registro">
+        <div class="row2">
+          <div class="field"><label for="remail">Email</label><input class="input" id="remail" name="email" type="email" autocomplete="email" required></div>
+          <div class="field"><label for="remail2">Confirmar email</label><input class="input" id="remail2" name="email2" type="email" required></div>
+        </div>
+        <div class="row2">
+          <div class="field"><label for="fnac">Fecha de nacimiento</label><input class="input" id="fnac" name="nacimiento" type="date" required></div>
+          <div class="field"><label for="fcel">Celular</label><input class="input" id="fcel" name="celular" type="tel" autocomplete="tel" placeholder="11 1234-5678"></div>
+        </div>
+        <div class="row2">
+          <div class="field"><label for="rpass">Contraseña</label><input class="input" id="rpass" name="password" type="password" autocomplete="new-password" required minlength="6"></div>
+          <div class="field"><label for="rpass2">Confirmar contraseña</label><input class="input" id="rpass2" name="password2" type="password" autocomplete="new-password" required minlength="6"></div>
+        </div>
+        <div class="view-actions"><button class="btn btn-primary" type="submit">Crear cuenta</button></div>
+      </form>
+      <div class="register-social">${socialOptions()}</div>
     </div>
-    <div class="or">o registrate con tu email</div>
-    <form data-form="registro">
-      <div class="field"><label for="remail">Email</label><input class="input" id="remail" name="email" type="email" required placeholder="prueba@gmail.com" /></div>
-      <div class="field"><label for="remail2">Confirmar email</label><input class="input" id="remail2" name="email2" type="email" required placeholder="prueba@gmail.com" /></div>
-      <div class="row2">
-        <div class="field"><label for="fnac">Fecha de nacimiento</label><input class="input" id="fnac" name="nacimiento" type="date" required /></div>
-        <div class="field"><label for="fcel">Celular</label><input class="input" id="fcel" name="celular" type="tel" placeholder="11 1234-5678" /></div>
-      </div>
-      <div class="row2">
-        <div class="field"><label for="rpass">Contraseña</label><input class="input" id="rpass" name="password" type="password" required minlength="6" placeholder="••••••••" /></div>
-        <div class="field"><label for="rpass2">Confirmar contraseña</label><input class="input" id="rpass2" name="password2" type="password" required minlength="6" placeholder="••••••••" /></div>
-      </div>
-      <button class="btn btn-primary btn-block" type="submit">Registrarse</button>
-    </form>
-    <p class="auth-foot">¿Ya tenés cuenta? <a href="#/login">Iniciar sesión</a></p>
+    <p class="auth-foot">¿Ya tenés cuenta? <a href="${authLink("login")}">Iniciar sesión</a></p>
   </div></div></div></section>`;
 }
 
 function renderLogin() {
-  return `<section class="section"><div class="container"><div class="auth-wrap"><div class="auth-card">
+  return `<section class="section"><div class="container"><div class="auth-wrap login-wrap"><div class="auth-card">
     <h1>Inicio de sesión</h1><p class="sub">Ingresá para crear reclamos, apoyar y comentar.</p>
-    <div class="social-row">
-      <button type="button" class="social-btn" data-action="demo-social"><span class="g">G</span> Continuar con Google</button>
-      <button type="button" class="social-btn" data-action="demo-social"><span style="color:#1877f2;font-weight:800">f</span> Continuar con Facebook</button>
-      <button type="button" class="social-btn" data-action="demo-social"> Continuar con Apple</button>
-    </div>
-    <div class="or">o ingresá con tu email</div>
     <form data-form="login">
-      <div class="field"><label for="lemail">Email</label><input class="input" id="lemail" name="email" type="email" required placeholder="prueba@gmail.com" /></div>
-      <div class="field"><label for="lpass">Contraseña</label><input class="input" id="lpass" name="password" type="password" required placeholder="••••••••" /><a href="#/login" class="hint" data-action="forgot" style="align-self:flex-end">¿Olvidaste tu contraseña?</a></div>
+      <div class="field"><label for="lemail">Email</label><input class="input" id="lemail" name="email" type="email" autocomplete="email" required></div>
+      <div class="field"><label for="lpass">Contraseña</label><input class="input" id="lpass" name="password" type="password" autocomplete="current-password" required></div>
       <button class="btn btn-primary btn-block" type="submit">Ingresar</button>
     </form>
-    <p class="auth-foot">¿No tenés cuenta? <a href="#/registro">Crear cuenta</a></p>
+    <p class="auth-foot"><button type="button" class="btn btn-ghost btn-sm" data-action="forgot">¿Olvidaste tu contraseña?</button></p>
+    <div class="or">Continuar con</div>
+    ${socialOptions()}
+    <p class="auth-foot">¿No tenés cuenta? <a href="${authLink("registro")}">Crear cuenta</a></p>
   </div></div></div></section>`;
 }
 
 function renderPerfil() {
   if (!state.session.logged) return authGate("Ingresá a tu perfil", "Iniciá sesión para ver tus datos y tus reclamos.");
-  const mine = state.claims.filter((c) => c.owner === state.session.email);
+  const account = state.session;
+  const mine = state.claims.filter((c) => c.owner === account.email);
   return `<section class="section"><div class="container">
-    <div class="profile-head"><div class="avatar-lg">${esc(initials(state.session.nombre))}</div><div style="flex:1"><h1>${esc(state.session.nombre)}</h1><p>${esc(state.session.email)} · Vecino/a de Vicente López</p></div><button class="btn btn-ghost btn-sm" data-action="logout">${icon("logout", 16)} Cerrar sesión</button></div>
-    <div class="stat-cards" style="margin-top:18px">
-      <div class="stat-card"><span class="ic" style="color:var(--primary);background:var(--primary-soft)">${icon("doc", 20)}</span><div><div class="n">${mine.length}</div><div class="l">Reclamos creados</div></div></div>
-      <div class="stat-card"><span class="ic" style="color:var(--accent);background:var(--accent-soft)">${icon("support", 20)}</span><div><div class="n">${state.supported.length}</div><div class="l">Reclamos apoyados</div></div></div>
-      <div class="stat-card"><span class="ic" style="color:var(--ok);background:var(--ok-soft)">${icon("bell", 20)}</span><div><div class="n">${state.notifications.filter((n) => !n.leida).length}</div><div class="l">Notificaciones sin leer</div></div></div>
+    <div class="section-head"><div><h2>Mi cuenta</h2><p>Administrá tus datos y preferencias.</p></div></div>
+    <div class="account-grid">
+      <aside class="panel panel-pad account-summary">
+        <div class="avatar-lg">${esc(initials(account.nombre))}</div>
+        <h3>${esc(account.nombre)}</h3><p class="muted">${esc(account.email)}</p>
+        <hr class="divider"><p><strong>Cuenta vecinal</strong></p>
+        <p>Barrio <strong>${esc(account.barrio || "Sin indicar")}</strong></p>
+        <a class="btn btn-ghost" href="#/mis-reclamos">Mis reclamos · ${mine.length}</a>
+      </aside>
+      <form class="account-form" data-form="perfil">
+        <div class="panel panel-pad"><h3>Datos personales</h3><p class="muted">Actualizá la información de tu cuenta.</p>
+          <div class="row2">
+            <div class="field"><label for="pnombre">Nombre y apellido</label><input class="input" id="pnombre" name="nombre" value="${esc(account.nombre)}" autocomplete="name" required></div>
+            <div class="field"><label for="pemail">Correo electrónico</label><input class="input" id="pemail" name="email" type="email" autocomplete="email" value="${esc(account.email)}" required></div>
+            <div class="field"><label for="pbarrio">Barrio</label><select class="input" id="pbarrio" name="barrio"><option value="">Sin indicar</option>${Object.keys(BARRIOS).map((b) => `<option ${b === account.barrio ? "selected" : ""}>${esc(b)}</option>`).join("")}</select></div>
+            <div class="field"><label for="ptel">Teléfono</label><input class="input" id="ptel" name="celular" type="tel" autocomplete="tel" value="${esc(account.celular || "")}"></div>
+          </div>
+        </div>
+        <div class="panel panel-pad"><h3>Notificaciones</h3>
+          <label class="preference"><span>Recibir novedades sobre mis reclamos</span><input name="novedades" type="checkbox" ${account.novedades !== false ? "checked" : ""}></label>
+          <label class="preference"><span>Preferencia de avisos por correo</span><input name="correo" type="checkbox" ${account.correo ? "checked" : ""}></label>
+        </div>
+        <div class="view-actions"><button class="btn btn-primary" type="submit">Guardar cambios</button></div>
+      </form>
     </div>
-    <div class="section-head" style="margin-top:26px"><div><h2>Mis reclamos</h2></div><a class="btn btn-primary btn-sm" href="#/crear">${icon("plus", 15)} Crear reclamo</a></div>
-    ${mine.length ? `<div class="claim-grid">${mine.map(claimCard).join("")}</div>` : `<div class="empty">Todavía no creaste reclamos. <a href="#/crear" style="color:var(--primary);font-weight:700">Creá el primero</a>.</div>`}
   </div></section>`;
 }
 
 function renderMisReclamos() {
   if (!state.session.logged) return authGate("Ingresá para ver tus reclamos", "Iniciá sesión para consultar el estado de los reclamos que creaste.");
   const mine = state.claims.filter((c) => c.owner === state.session.email);
+  const estado = getRoute().params.get("estado");
+  const active = Object.hasOwn(ESTADOS, estado) ? estado : "";
+  const tabs = [["", "Todos"], ["abierto", "En revisión"], ["en_proceso", "En curso"], ["resuelto", "Resueltos"]];
+  const filtered = active ? mine.filter((c) => c.estado === active) : mine;
   return `<section class="section"><div class="container">
-    <div class="section-head"><div><span class="eyebrow">${icon("doc", 15)} Mi cuenta</span><h2 style="margin-top:12px">Mis reclamos</h2><p>Reclamos hechos por vos y su estado actual.</p></div><a class="btn btn-primary" href="#/crear">${icon("plus", 17)} Crear reclamo</a></div>
-    ${mine.length ? `<div class="claim-grid">${mine.map(claimCard).join("")}</div>` : `<div class="empty"><p style="font-weight:700;color:var(--ink);margin:0 0 6px">Todavía no tenés reclamos</p><p style="margin:0 0 14px">Cuando crees uno, vas a poder seguirlo desde acá.</p><a class="btn btn-primary" href="#/crear">${icon("plus", 16)} Crear mi primer reclamo</a></div>`}
+    <div class="section-head"><div><h2>Mis reclamos</h2><p>Revisá el estado y las novedades de tus reportes.</p></div><a class="btn btn-primary" href="#/crear">${icon("plus", 17)} Crear reclamo</a></div>
+    <nav class="chipbar status-tabs" aria-label="Filtrar por estado">${tabs.map(([key, label]) => `<a class="chipbtn ${key === active ? "is-active" : ""}" ${key === active ? 'aria-current="page"' : ""} href="#/mis-reclamos${key ? "?estado=" + key : ""}">${label} · ${key ? mine.filter((c) => c.estado === key).length : mine.length}</a>`).join("")}</nav>
+    ${filtered.length ? `<div class="claim-list">${filtered.map((c) => claimRow(c, { status: true })).join("")}</div>` : `<div class="empty"><p>${mine.length ? "No tenés reclamos en este estado." : "Todavía no tenés reclamos."}</p>${mine.length ? "" : '<a class="btn btn-primary" href="#/crear">Crear mi primer reclamo</a>'}</div>`}
   </div></section>`;
 }
 
 function renderNotificaciones() {
-  const list = state.notifications;
+  if (!state.session.logged) return authGate("Ingresá para ver tus notificaciones", "Consultá las novedades y respuestas sobre tus reclamos.");
+  const list = accountNotifications();
   const tipoIcon = { estado: "check", apoyo: "support", municipio: "building", sistema: "bell" };
   return `<section class="section"><div class="container">
-    <div class="section-head"><div><span class="eyebrow">${icon("bell", 15)} Mi cuenta</span><h2 style="margin-top:12px">Notificaciones</h2><p>Novedades, estados actualizados y respuestas del municipio.</p></div>${list.length ? `<button class="btn btn-ghost btn-sm" data-action="mark-all">Marcar todas como leídas</button>` : ""}</div>
-    ${list.length ? `<div class="notif-list">${list.map((n) => `<a class="notif-item ${n.leida ? "" : "unread"}" data-id="${n.id}" href="${n.ref ? "#/reclamo/" + n.ref : "#/"}"><span class="nic">${icon(tipoIcon[n.tipo] || "bell", 19)}</span><span style="flex:1"><span class="nt" style="display:block">${esc(n.titulo)}</span><span class="nd" style="display:block">${esc(n.texto)}</span><span class="nh" style="display:block">${fmtDate(n.fecha)}</span></span>${n.leida ? "" : '<span class="new-dot"></span>'}</a>`).join("")}</div>` : `<div class="empty"><p style="font-weight:700;color:var(--ink);margin:0 0 6px">No tenés notificaciones</p><p style="margin:0">Cuando haya novedades sobre tus reclamos, van a aparecer acá.</p></div>`}
+    <div class="section-head"><div><h2 class="notification-heading">${icon("bell", 30)} Notificaciones</h2><p>Novedades, estados actualizados y respuestas del municipio.</p></div>${list.some((n) => !n.leida) ? `<button class="btn btn-ghost btn-sm" data-action="mark-all">Marcar todas como leídas</button>` : ""}</div>
+    ${list.length ? `<div class="notif-list">${list.map((n) => `<a class="notif-item ${n.leida ? "" : "unread"}" data-id="${esc(n.id)}" href="${n.ref ? "#/reclamo/" + esc(n.ref) : "#/"}"><span class="nic">${icon(tipoIcon[n.tipo] || "bell", 21)}</span><span class="notification-body"><span class="nt">${esc(n.titulo)}</span><span class="nd">${esc(n.texto)}</span></span><span class="nh">${fmtDate(n.fecha)}</span>${n.leida ? "" : '<span class="new-dot" aria-label="Sin leer"></span>'}</a>`).join("")}</div>` : `<div class="empty"><p>No tenés notificaciones.</p><p>Cuando haya novedades, van a aparecer acá.</p></div>`}
   </div></section>`;
 }
 
 function renderMunicipio() {
-  return `<section class="section"><div class="container">
-    <div class="muni-hero with-photo">
-      <span class="eyebrow" style="background:rgba(255,255,255,.16);color:#fff">${icon("building", 15)} El Municipio</span>
-      <h1>Un Municipio más cerca tuyo</h1>
-      <p>Somos el Municipio, una institución comprometida con el bienestar y el desarrollo de nuestra comunidad. Trabajamos día a día para construir una ciudad mejor, brindando servicios, atendiendo las necesidades de los vecinos y promoviendo espacios de participación ciudadana.</p>
-      <p>Creemos que escuchar a nuestros vecinos es fundamental para seguir creciendo. Por eso ponemos a tu disposición esta plataforma, donde podés realizar reclamos, informar inconvenientes y ayudarnos a identificar las situaciones que necesitan una solución.</p>
-      <a class="btn btn-accent" href="#/crear" style="margin-top:8px">${icon("plus", 17)} Realizar reclamo</a>
-      <div class="muni-facts">
-        <div><b>8</b><span>barrios</span></div>
-        <div><b>24/7</b><span>reclamos online</span></div>
-        <div><b>1</b><span>solo lugar</span></div>
+  return `<section class="section"><div class="container muni-intro">
+    <div class="muni-intro-row">
+      <div><span class="eyebrow">${icon("building", 15)} Vicente López</span><h1>Conocé tu Municipio</h1>
+        <p>Trabajamos para mejorar la ciudad, brindar servicios y promover la participación de los vecinos.</p>
+        <p>En AvisAR podés informar problemas de tu barrio y seguir el estado de cada reclamo.</p>
       </div>
+      <img src="assets/municipio-costa.jpg" alt="Paseo de la Costa de Vicente López">
     </div>
-    <div class="muni-blocks">
-      <div class="step"><span class="num">${icon("building", 18)}</span><h3>Conocé tu Municipio</h3><p>Información institucional, servicios y canales de atención para los vecinos de Vicente López.</p></div>
-      <div class="step"><span class="num">${icon("users", 18)}</span><h3>Participación ciudadana</h3><p>Un espacio para escuchar, acompañar y resolver las necesidades de la comunidad.</p></div>
-      <div class="step"><span class="num">${icon("check", 18)}</span><h3>Construyamos juntos</h3><p>Seguimos trabajando para construir una ciudad mejor, con respuestas claras y evidencia pública.</p></div>
-    </div>
-    <div class="section-head" style="margin-top:30px"><div><span class="eyebrow">${icon("pin", 15)} Vicente López</span><h2 style="margin-top:10px">El municipio, en imágenes</h2><p>La costa, las avenidas y los espacios verdes que compartimos todos los días.</p></div></div>
-    <div class="muni-gallery">
-      <figure><img src="assets/municipio-costa.jpg" alt="Vista aérea del Paseo de la Costa de Vicente López" loading="lazy" /><figcaption>${icon("pin", 13)} Paseo de la Costa</figcaption></figure>
-      <figure><img src="assets/municipio-avenida.jpg" alt="Avenida del Libertador en Vicente López" loading="lazy" /><figcaption>${icon("pin", 13)} Avenida del Libertador</figcaption></figure>
-      <figure><img src="assets/municipio-reserva.jpg" alt="Reserva ecológica de Vicente López" loading="lazy" /><figcaption>${icon("pin", 13)} Reserva ecológica</figcaption></figure>
+    <div class="muni-intro-row">
+      <img src="assets/municipio-edificio.jpg" alt="Edificio municipal de Vicente López">
+      <div><h2>Un Municipio más cerca tuyo</h2><p>Queremos escuchar a los vecinos y atender las necesidades de cada barrio.</p>
+        <div class="muni-actions">
+          <a class="btn btn-primary" href="#/crear">${icon("plus", 17)} Realizar reclamo</a>
+          <a class="btn btn-ghost" href="#/municipal">${icon("building", 17)} Abrir panel municipal</a>
+        </div>
+      </div>
     </div>
     <p class="photo-credit">Fotos del partido de Vicente López · Wikimedia Commons</p>
   </div></section>`;
 }
 
-function renderMunicipal() {
-  if (!state.claims.length) {
-    return `<section class="section"><div class="container"><div class="section-head"><div><span class="eyebrow">${icon("building", 15)} Municipio</span><h2 style="margin-top:12px">Panel municipal</h2><p>Respondé, verificá y cargá evidencia de las soluciones.</p></div></div><div class="empty"><p style="font-weight:700;color:var(--ink);margin:0 0 6px">No hay reclamos para gestionar</p><p style="margin:0">Cuando los vecinos publiquen reclamos, van a aparecer en este panel.</p></div></div></section>`;
-  }
-  const { params } = getRoute();
-  const selectedId = params.get("id") || state.claims[0]?.id;
-  const c = getClaim(selectedId) || state.claims[0];
-  const options = state.claims.map((x) => `<option value="${x.id}" ${x.id === c.id ? "selected" : ""}>${esc(x.titulo)} · ${esc(x.barrio)}</option>`).join("");
-  const recent = [...state.claims].sort((a, b) => new Date(b.fecha) - new Date(a.fecha)).slice(0, 4).map((x) => `<a class="map-mini" href="#/municipal?id=${x.id}" style="--c:${catMeta(x.categoria).color}"><span class="ic">${icon(catMeta(x.categoria).icon, 20)}</span><span><span class="t">${esc(x.titulo)}</span><span class="s">${ESTADOS[x.estado]} · ${x.apoyos} apoyos</span></span></a>`).join("");
+function municipalURL(queue, q, id) {
+  const params = new URLSearchParams({ cola: queue });
+  if (q) params.set("q", q);
+  if (id) params.set("id", id);
+  return "#/municipal?" + params;
+}
 
-  return `<section class="section"><div class="container">
-    <div class="section-head"><div><span class="eyebrow">${icon("building", 15)} Municipio</span><h2 style="margin-top:12px">Panel municipal</h2><p>Respondé, verificá y cargá evidencia de las soluciones. Un reclamo solo se cierra con evidencia.</p></div></div>
-    <div class="detail-grid">
-      <div class="panel panel-pad">
-        <div class="field"><label for="selClaim">Reclamo a gestionar</label><select class="input" id="selClaim" onchange="window.location.hash='#/municipal?id='+this.value">${options}</select></div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;margin:6px 0 4px">${catChip(c.categoria)}${statusBadge(c.estado)}${c.verificado ? '<span class="badge badge-verified">' + icon("check", 13) + " Verificado</span>" : ""}</div>
-        <h3 style="margin:10px 0 4px">${esc(c.titulo)}</h3>
-        <p class="muted" style="margin:0 0 18px;font-size:.86rem">${esc(c.barrio)} · ${c.apoyos} apoyos</p>
-        <form data-form="municipal" data-id="${c.id}">
-          <div class="row2">
-            <div class="field"><label for="estado">Estado</label><select class="input" id="estado" name="estado"><option value="abierto" ${c.estado === "abierto" ? "selected" : ""}>Abierto</option><option value="en_proceso" ${c.estado === "en_proceso" ? "selected" : ""}>En proceso</option><option value="resuelto" ${c.estado === "resuelto" ? "selected" : ""}>Resuelto</option></select></div>
-            <div class="field"><label>Verificación</label><label style="display:flex;align-items:center;gap:8px;font-weight:500;padding:11px 0"><input type="checkbox" name="verificado" ${c.verificado ? "checked" : ""} /> Información verificada</label></div>
-          </div>
-          <div class="field"><label for="evidencia">Evidencia de la solución</label><span class="hint">Obligatoria para marcar como resuelto.</span><textarea class="textarea" id="evidencia" name="evidencia" style="min-height:80px" placeholder="Ej.: Se repavimentó el tramo y se verificó el 12/11…">${esc(c.evidencia || "")}</textarea></div>
-          <div class="field"><label for="respuesta">Respuesta pública al vecino</label><textarea class="textarea" id="respuesta" name="respuesta" style="min-height:90px" placeholder="Escribí una respuesta que se publicará en el reclamo…"></textarea></div>
-          <button class="btn btn-primary" type="submit">${icon("check", 17)} Guardar actualización</button>
-        </form>
+function municipalEditor(c) {
+  if (!c) return `<div class="panel panel-pad municipal-editor municipal-empty">
+    <h3>Sin reclamos para editar</h3><p class="muted">Elegí otra cola o cambiá la búsqueda.</p>
+  </div>`;
+  const latest = c.comentarios.findLast((entry) => entry.muni);
+  return `<article class="panel municipal-editor" aria-labelledby="municipal-editor-title">
+    <header class="municipal-record">
+      <div class="municipal-badges">${catChip(c.categoria)}${statusBadge(c.estado)}</div>
+      <h3 id="municipal-editor-title" tabindex="-1">${esc(c.titulo)}</h3>
+      <p class="municipal-meta">#${esc(c.numero)} · ${esc(c.barrio)} · ${fmtDate(c.fecha)} · ${c.apoyos} ${c.apoyos === 1 ? "apoyo" : "apoyos"}</p>
+      <p class="municipal-description">${esc(c.descripcion)}</p>
+      <a class="btn btn-ghost btn-sm" href="#/reclamo/${esc(c.id)}">Ver reclamo público →</a>
+    </header>
+    <form class="municipal-form" data-form="municipal" data-id="${esc(c.id)}">
+      <div class="municipal-form-section">
+        <h4>Estado y verificación</h4>
+        <div class="row2">
+          <div class="field"><label for="estado">Estado</label><select class="input" id="estado" name="estado">${Object.entries(ESTADOS).map(([key, label]) => `<option value="${key}" ${c.estado === key ? "selected" : ""}>${label}</option>`).join("")}</select></div>
+          <label class="municipal-verify"><input type="checkbox" name="verificado" ${c.verificado ? "checked" : ""}> Información verificada</label>
+        </div>
       </div>
-      <aside style="display:flex;flex-direction:column;gap:16px">
-        <div class="panel panel-pad"><h3 style="margin:0 0 12px;font-size:.95rem">Reclamos recientes</h3><div class="map-side">${recent}</div></div>
-        <div class="form-note" style="background:var(--warn-soft);border-color:#f5d9a8;color:#92400e">${icon("check", 18)} <span>Regla de cierre: un reclamo solo pasa a <strong>Resuelto</strong> con evidencia cargada.</span></div>
+      <div class="municipal-form-section">
+        <h4>Evidencia y respuesta</h4>
+        <div class="field"><label for="evidencia">Evidencia de la solución</label><span id="evidencia-hint" class="hint">Para cerrar el reclamo, registrá qué se hizo y cómo se comprobó la solución.</span><textarea class="textarea" id="evidencia" name="evidencia" aria-describedby="evidencia-hint" rows="3" placeholder="Ej.: Se destapó la rejilla y se comprobó el escurrimiento.">${esc(c.evidencia || "")}</textarea></div>
+        ${c.evidenciaFoto ? `<details class="municipal-latest"><summary>Ver evidencia adjunta</summary><img src="${esc(c.evidenciaFoto)}" alt="Evidencia de resolución"></details>` : ""}
+        <div class="field"><label for="respuesta">Respuesta pública <span class="hint">· Opcional</span></label><textarea class="textarea" id="respuesta" name="respuesta" rows="3" placeholder="Contale al vecino qué pasó o cuál es el próximo paso."></textarea></div>
+        ${latest ? `<details class="municipal-latest"><summary>Última respuesta · ${fmtDate(latest.fecha)}</summary><p>${esc(latest.texto)}</p></details>` : ""}
+      </div>
+      <div class="municipal-form-footer"><button class="btn btn-primary" type="submit">${icon("check", 17)} Guardar actualización</button></div>
+    </form>
+  </article>`;
+}
+
+function renderMunicipal() {
+  const claims = state.claims;
+  const { params } = getRoute();
+  const selectedId = params.get("id");
+  const pending = claims.filter((c) => c.estado !== "resuelto");
+  const resolved = claims.filter((c) => c.estado === "resuelto");
+  const queues = {
+    pendientes: { label: "Pendientes", items: pending },
+    resueltos: { label: "Resueltos", items: resolved },
+    todos: { label: "Todos", items: claims },
+  };
+  const requested = params.get("cola");
+  const queue = Object.hasOwn(queues, requested) ? requested
+    : resolved.some((c) => c.id === selectedId) ? "resueltos" : "pendientes";
+  const q = (params.get("q") || "").trim();
+  const query = q.toLocaleLowerCase("es-AR");
+  const list = queues[queue].items.filter((c) =>
+    `${c.titulo} ${c.barrio} ${c.numero}`.toLocaleLowerCase("es-AR").includes(query)
+  ).sort((a, b) => b.fecha.localeCompare(a.fecha));
+  const selected = list.find((c) => c.id === selectedId) || list[0];
+  return `<section class="section municipal-panel"><div class="container">
+    <div class="section-head municipal-heading"><div><span class="section-kicker">Municipio · Gestión de reclamos</span><h2>Panel municipal</h2><p>Revisá la cola y publicá avances para los vecinos.</p></div><a class="btn btn-ghost" href="#/municipio">Volver al municipio</a></div>
+    <nav class="municipal-tabs" aria-label="Colas de reclamos">${Object.entries(queues).map(([key, group]) =>
+      `<a href="${esc(municipalURL(key, q))}" ${key === queue ? 'aria-current="page"' : ""}>${group.label}<strong>${group.items.length}</strong></a>`
+    ).join("")}</nav>
+    <div class="municipal-workspace">
+      <aside class="panel municipal-queue" aria-labelledby="municipal-queue-title">
+        <header><h3 id="municipal-queue-title">Reclamos ${queue === "todos" ? "en el panel" : queues[queue].label.toLowerCase()}</h3>
+          <form data-form="municipal-search" data-queue="${queue}">
+            <label for="municipalQuery">Buscar por título, barrio o número</label>
+            <div class="municipal-search"><input class="input" type="search" name="q" id="municipalQuery" value="${esc(q)}" placeholder="Ej.: Olivos o E-001"><button class="btn btn-ghost" type="submit" aria-label="Buscar reclamos">${icon("search", 17)}</button></div>
+          </form>
+          <div class="municipal-queue-meta"><span role="status">${list.length} ${list.length === 1 ? "resultado" : "resultados"}</span>${q ? `<a href="${municipalURL(queue, "")}">Limpiar búsqueda</a>` : ""}</div>
+        </header>
+        ${list.length ? `<ul class="municipal-list">${list.map((c) => `<li><a href="${esc(municipalURL(queue, q, c.id))}" ${c === selected ? 'aria-current="true"' : ""}>
+          <strong>${esc(c.titulo)}</strong><span class="municipal-meta">${esc(c.barrio)} · #${esc(c.numero)}</span>
+          <span class="municipal-badges">${statusBadge(c.estado)}</span>
+        </a></li>`).join("")}</ul>` : '<p class="municipal-queue-empty">No hay reclamos en esta selección.</p>'}
       </aside>
+      ${municipalEditor(selected)}
     </div>
   </div></section>`;
 }
@@ -641,56 +820,160 @@ function renderMunicipal() {
 function renderMapa() {
   const { params } = getRoute();
   const cat = params.get("cat") || "todos";
-  const list = state.claims.filter((c) => cat === "todos" || c.categoria === cat);
-  const chips = [["todos", "Todos", "#0f766e"]].concat(Object.entries(CATEGORIES).map(([k, c]) => [k, c.label, c.color]))
-    .map(([k, label, color]) => `<a class="chipbtn ${cat === k ? "is-active" : ""}" style="--c:${color}" href="#/mapa${k === "todos" ? "" : "?cat=" + k}"><span class="sw"></span>${label}</a>`).join("");
+  const estado = params.get("estado") || "todos";
+  const list = state.claims.filter((c) => (cat === "todos" || c.categoria === cat) && (estado === "todos" || c.estado === estado));
+  const categoryURL = (key) => {
+    const query = new URLSearchParams(params);
+    if (key === "todos") query.delete("cat");
+    else query.set("cat", key);
+    return "#/mapa" + (query.size ? "?" + query.toString() : "");
+  };
+  const chips = [["todos", "Todos", "#0f766e"]].concat(Object.entries(REPORT_CATEGORIES).map(([k, c]) => [k, c.label, c.color]))
+    .map(([k, label, color]) => `<a class="chipbtn ${cat === k ? "is-active" : ""}" style="--c:${color}" href="${categoryURL(k)}"><span class="sw"></span>${label}</a>`).join("");
   return `<section class="section"><div class="container">
-    <div class="section-head"><div><span class="eyebrow">${icon("pin", 15)} Mapa</span><h2 style="margin-top:12px">Mapa de reclamos · Vicente López</h2><p>${list.length} ${list.length === 1 ? "reclamo ubicado" : "reclamos ubicados"}. Hacé clic en un ícono para ver el detalle.</p></div></div>
+    <div class="section-head"><div><span class="eyebrow">${icon("pin", 15)} Mapa</span><h2 style="margin-top:12px">Mapa de reclamos · Vicente López</h2><p>${list.length} ${list.length === 1 ? "reclamo ubicado" : "reclamos ubicados"}. Acercate para separar las tarjetas y abrí un reclamo para ver el detalle.</p></div>
+      <label class="stats-period">Estado <select class="input" id="mapStatus"><option value="todos">Todos los estados</option>${Object.entries(ESTADOS).map(([key, label]) => `<option value="${key}" ${key === estado ? "selected" : ""}>${label}</option>`).join("")}</select></label>
+    </div>
     <div class="chipbar" style="margin-bottom:16px">${chips}</div>
     <div class="map-wrap">
-      <div class="map-card">${staticMap(list, { labels: true, cls: "explore-map" })}<div class="map-legend">${mapLegend()}</div>
-        ${list.length === 0 ? `<div class="map-empty"><div class="me-card"><span class="me-ic">${icon("pin", 24)}</span><strong>No hay reclamos</strong><p>Cuando se publiquen, vas a verlos acá con su ícono y ubicación.</p></div></div>` : ""}
+      <div class="map-card">${reportMap(list, { cls: "explore-map" })}<div class="map-legend">${mapLegend(REPORT_CATEGORIES)}</div>
+        ${list.length === 0 ? `<div class="map-empty"><div class="me-card"><span class="me-ic">${icon("pin", 24)}</span><strong>No hay reclamos en esta selección</strong><p>Probá cambiar la categoría o el estado.</p></div></div>` : ""}
       </div>
-      <div class="map-side">${list.length ? list.map((c) => { const cm = catMeta(c.categoria); return `<a class="map-mini" href="#/reclamo/${c.id}" style="--c:${cm.color}"><span class="ic">${icon(cm.icon, 20)}</span><span><span class="t">${esc(c.titulo)}</span><span class="s">${esc(c.barrio)} · ${c.apoyos} apoyos</span></span></a>`; }).join("") : `<div class="empty" style="padding:34px 18px">Sin reclamos todavía.</div>`}</div>
+      <div class="map-side">${list.length ? list.map((c) => { const cm = catMeta(c.categoria); return `<a class="map-mini" href="#/reclamo/${c.id}" style="--c:${cm.color}"><span class="ic">${icon(cm.icon, 20)}</span><span><span class="t">${esc(c.titulo)}</span><span class="s">${esc(c.barrio)} · ${ESTADOS[c.estado]} · ${c.apoyos} apoyos</span></span></a>`; }).join("") : `<div class="empty" style="padding:34px 18px">Sin reclamos todavía.</div>`}</div>
     </div>
   </div></section>`;
 }
 
-function renderEstadisticas() {
-  const claims = state.claims;
-  const total = claims.length;
-  const apoyos = claims.reduce((s, c) => s + c.apoyos, 0);
-  const resueltos = claims.filter((c) => c.estado === "resuelto").length;
-  const peticiones = claims.filter((c) => c.apoyos >= THRESHOLD).length;
-  const byCat = Object.entries(CATEGORIES).map(([k, c]) => ({ label: c.label, color: c.color, n: claims.filter((x) => x.categoria === k).length }));
-  const maxCat = Math.max(1, ...byCat.map((x) => x.n));
-  const byEstado = Object.entries(ESTADOS).map(([k, label]) => ({ label, n: claims.filter((x) => x.estado === k).length, color: k === "resuelto" ? "#16a34a" : k === "en_proceso" ? "#2563eb" : "#d97706" }));
-  const maxEst = Math.max(1, ...byEstado.map((x) => x.n));
-  const now = new Date();
-  const months = [];
-  for (let i = 5; i >= 0; i--) { const d = new Date(now.getFullYear(), now.getMonth() - i, 1); months.push({ key: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`, label: MESES[d.getMonth()], n: 0 }); }
-  claims.forEach((c) => { const m = months.find((x) => x.key === c.fecha.slice(0, 7)); if (m) m.n++; });
-  const maxMonth = Math.max(1, ...months.map((m) => m.n));
-  const barrios = Object.keys(BARRIOS).map((b) => ({ b, n: claims.filter((c) => c.barrio === b).length })).sort((a, b) => b.n - a.n).slice(0, 5);
-  const maxBarrio = Math.max(1, ...barrios.map((x) => x.n));
+const CHART_LEAD_MS = 240;
+const CHART_TRACE_MS = 1450;
+const CHART_STATES = [
+  { key: "abierto", label: "Abiertos", color: "#a55e2c" },
+  { key: "en_proceso", label: "En proceso", color: "#416b98" },
+  { key: "resuelto", label: "Resueltos", color: "#327452" },
+];
 
-  return `<section class="section"><div class="container">
-    <div class="section-head"><div><span class="eyebrow">${icon("chart", 15)} Estadísticas</span><h2 style="margin-top:12px">Indicadores públicos de Vicente López</h2><p>Datos abiertos a partir de los reclamos registrados.</p></div></div>
-    <div class="kpi-grid">
-      <div class="kpi"><span class="ic" style="color:var(--primary);background:var(--primary-soft)">${icon("doc", 18)}</span><div class="n">${total}</div><div class="l">Reclamos totales</div></div>
-      <div class="kpi"><span class="ic" style="color:var(--accent);background:var(--accent-soft)">${icon("support", 18)}</span><div class="n">${apoyos}</div><div class="l">Apoyos ciudadanos</div></div>
-      <div class="kpi"><span class="ic" style="color:var(--ok);background:var(--ok-soft)">${icon("check", 18)}</span><div class="n">${resueltos}</div><div class="l">Resueltos con evidencia</div></div>
-      <div class="kpi"><span class="ic" style="color:var(--info);background:var(--info-soft)">${icon("users", 18)}</span><div class="n">${peticiones}</div><div class="l">Peticiones habilitadas</div></div>
+function trendChart(months) {
+  const tick = Math.max(1, Math.ceil(Math.max(...months.map((m) => m.n)) / 4));
+  const x = (i) => months.length === 1 ? 232 : 38 + i * (388 / (months.length - 1));
+  const y = (n) => 147 - n / (tick * 4) * 122;
+  const path = (key) => months.map((m, i) => `${x(i)},${y(m[key])}`).join(" ");
+  const series = (key, color, dash = "") => {
+    let distance = 0;
+    const points = months.map((month, i) => {
+      if (i > 0) distance += Math.hypot(x(i) - x(i - 1), y(month[key]) - y(months[i - 1][key]));
+      return { month, i, distance };
+    });
+    const start = CHART_LEAD_MS + (key === "n" ? 0 : 140);
+    const maskId = "trend-mask-" + key;
+    return `<defs><mask id="${maskId}" maskUnits="userSpaceOnUse" x="0" y="0" width="460" height="178">
+      <polyline class="trend-stroke" points="${path(key)}" pathLength="100" fill="none" stroke="#fff" stroke-width="8" stroke-linecap="round" stroke-linejoin="round" style="--draw-delay:${start}ms;--draw-duration:${CHART_TRACE_MS}ms"/>
+    </mask></defs>
+    <polyline points="${path(key)}" mask="url(#${maskId})" fill="none" stroke="${color}" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="${dash}"/>
+    ${points.map(({ month, i, distance: position }) => `<circle class="trend-point" cx="${x(i)}" cy="${y(month[key])}" r="4.5" fill="${color}" style="--point-color:${color};--point-delay:${Math.round(start + CHART_TRACE_MS * (position / (distance || 1)))}ms"><title>${month.label} · ${month[key]}</title></circle>`).join("")}`;
+  };
+  return `<svg class="stats-chart" data-chart-plot viewBox="0 0 460 178" role="img" aria-label="${months.map((m) => `${m.label}: ${m.n} ingresados, ${m.done} resueltos`).join(". ")}">
+    ${[0, 1, 2, 3, 4].map((step) => `<line x1="38" x2="426" y1="${y(tick * step)}" y2="${y(tick * step)}" stroke="var(--line)"/><text x="26" y="${y(tick * step) + 4}" text-anchor="end">${tick * step}</text>`).join("")}
+    <g class="trend-ink">
+      <g data-chart-series="n">
+        <polygon class="trend-area" points="${x(0)},147 ${path("n")} ${x(months.length - 1)},147" fill="var(--primary-soft)"/>
+        ${series("n", "var(--primary)")}
+      </g>
+      <g data-chart-series="done">${series("done", "#416b98", "6 5")}</g>
+    </g>
+    ${months.map((m, i) => `<text x="${x(i)}" y="168" text-anchor="middle">${m.label}</text>`).join("")}
+  </svg><div class="stats-legend" aria-label="Series de evolución">
+    <button type="button" class="chart-toggle" data-series-toggle="n" aria-pressed="true">Ingresados</button>
+    <button type="button" class="chart-toggle" data-series-toggle="done" aria-pressed="true">Resueltos</button>
+  </div>`;
+}
+
+function statusChart(statuses, total) {
+  let offset = 0;
+  const slices = statuses.filter(({ n }) => n > 0).map(({ key, label, color, n }) => {
+    const share = n / total * 100;
+    const slice = `<circle data-status-slice="${key}" cx="62" cy="62" r="48" pathLength="100" fill="none" stroke="${color}" stroke-width="13"
+      stroke-dashoffset="${-offset}" style="--arc-share:${share};--arc-delay:${CHART_LEAD_MS + Math.round(offset * 16)}ms;--arc-duration:${Math.max(75, Math.round(share * 16))}ms"><title>${label} · ${n}</title></circle>`;
+    offset += share;
+    return slice;
+  }).join("");
+  return `<div class="status-chart-body">
+    <svg class="status-donut" data-chart-plot viewBox="0 0 124 124" role="img" aria-label="${statuses.map((item) => `${item.label}: ${item.n}`).join(". ")}">
+      <circle cx="62" cy="62" r="48" fill="none" stroke="var(--line)" stroke-width="13"/>
+      <g class="donut-slices" transform="rotate(-90 62 62)">${slices}</g>
+      <text class="donut-count" x="62" y="60" text-anchor="middle" data-total="${total}">${total}</text><text class="donut-caption" x="62" y="78" text-anchor="middle">reclamos</text>
+    </svg>
+    <ul class="chart-legend">${statuses.map(({ key, label, color, n }) => `<li><button type="button" class="chart-toggle status-toggle" data-status-toggle="${key}" data-count="${n}" aria-pressed="false" ${n === 0 ? "disabled" : ""}><i style="--series:${color}"></i><span>${label}</span><strong>${n}</strong></button></li>`).join("")}</ul>
+  </div>`;
+}
+
+function neighborhoodBar(states, max, rowDelay) {
+  let elapsed = rowDelay;
+  return states.filter((state) => state.n > 0).map((state) => {
+    const width = state.n / max;
+    const duration = Math.max(80, Math.round(width * 1280));
+    const segment = `<span class="stacked-segment" title="${state.label}: ${state.n}" style="--series:${state.color};width:${width * 100}%;--segment-delay:${elapsed}ms;--segment-duration:${duration}ms"></span>`;
+    elapsed += duration;
+    return segment;
+  }).join("");
+}
+
+function renderEstadisticas() {
+  const { params } = getRoute();
+  const period = params.get("periodo") === "30" ? "30" : "180";
+  const barrio = Object.hasOwn(BARRIOS, params.get("barrio")) ? params.get("barrio") : "";
+  const now = new Date();
+  const since = period === "30"
+    ? new Date(now.getFullYear(), now.getMonth(), now.getDate() - 29)
+    : new Date(now.getFullYear(), now.getMonth() - 5, 1);
+  const firstMonth = (now.getFullYear() - since.getFullYear()) * 12 + now.getMonth() - since.getMonth();
+  const claims = state.claims.filter((c) => (!barrio || c.barrio === barrio) && new Date(c.fecha + "T23:59:59") >= since);
+  const byStatus = (items) => CHART_STATES.map((status) => ({ ...status, n: items.filter((c) => c.estado === status.key).length }));
+  const statuses = byStatus(claims);
+  const resueltos = statuses.find(({ key }) => key === "resuelto").n;
+  const porcentaje = claims.length ? Math.round(resueltos * 100 / claims.length) : 0;
+  const byCat = Object.entries(REPORT_CATEGORIES).map(([key, c]) => ({ ...c, n: claims.filter((x) => x.categoria === key).length })).sort((a, b) => b.n - a.n);
+  const maxCat = Math.max(1, byCat[0].n);
+  const byBarrio = (barrio ? [barrio] : Object.keys(BARRIOS)).map((label) => {
+    const items = claims.filter((c) => c.barrio === label);
+    return { label, n: items.length, states: byStatus(items) };
+  }).sort((a, b) => b.n - a.n);
+  const maxBarrio = Math.max(1, byBarrio[0].n);
+  const months = [];
+  for (let i = firstMonth; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    const cohort = claims.filter((c) => c.fecha.startsWith(key));
+    months.push({ label: MESES[d.getMonth()], n: cohort.length, done: cohort.filter((c) => c.estado === "resuelto").length });
+  }
+
+  return `<section class="section dashboard"><div class="container">
+    <div class="section-head dashboard-head"><div><span class="section-kicker">Vicente López · En números</span><h2>Estadísticas de reclamos</h2><p>Consultá qué se reporta, dónde y cómo avanzan los reclamos.</p></div>
+      <div class="stats-filters">
+        <label class="stats-period">Período <select class="input" id="statsPeriod"><option value="180">Últimos 6 meses</option><option value="30" ${period === "30" ? "selected" : ""}>Últimos 30 días</option></select></label>
+        <label class="stats-period">Barrio <select class="input" id="statsBarrio"><option value="">Todos los barrios</option>${Object.keys(BARRIOS).map((label) => `<option ${label === barrio ? "selected" : ""}>${esc(label)}</option>`).join("")}</select></label>
+      </div>
     </div>
-    <div class="detail-grid">
-      <div style="display:flex;flex-direction:column;gap:18px">
-        <div class="panel panel-pad"><h3 style="margin:0 0 16px;font-size:1rem">Reclamos por categoría</h3><div class="bars">${byCat.map((x) => `<div class="bar-row"><span class="nm"><span style="width:9px;height:9px;border-radius:50%;background:${x.color};display:inline-block"></span>${x.label}</span><span class="bar-track"><i style="--c:${x.color};width:${(x.n / maxCat) * 100}%"></i></span><span class="val">${x.n}</span></div>`).join("")}</div></div>
-        <div class="panel panel-pad"><h3 style="margin:0 0 16px;font-size:1rem">Evolución (últimos 6 meses)</h3><div class="chart-cols">${months.map((m) => `<div class="chart-col"><span class="vv">${m.n}</span><span class="bar" style="height:${(m.n / maxMonth) * 100}%"></span><span class="cap">${m.label}</span></div>`).join("")}</div></div>
-      </div>
-      <div style="display:flex;flex-direction:column;gap:18px">
-        <div class="panel panel-pad"><h3 style="margin:0 0 16px;font-size:1rem">Estado de los reclamos</h3><div class="bars">${byEstado.map((x) => `<div class="bar-row" style="grid-template-columns:100px 1fr 34px"><span class="nm">${x.label}</span><span class="bar-track"><i style="--c:${x.color};width:${(x.n / maxEst) * 100}%"></i></span><span class="val">${x.n}</span></div>`).join("")}</div></div>
-        <div class="panel panel-pad"><h3 style="margin:0 0 16px;font-size:1rem">Barrios con más reclamos</h3><div class="bars">${barrios.map((x) => `<div class="bar-row" style="grid-template-columns:110px 1fr 30px"><span class="nm">${x.b}</span><span class="bar-track"><i style="--c:var(--primary);width:${(x.n / maxBarrio) * 100}%"></i></span><span class="val">${x.n}</span></div>`).join("")}</div></div>
-      </div>
+    <div class="dashboard-tools">
+      <button type="button" class="btn btn-ghost btn-sm" data-action="replay-charts"><span aria-hidden="true">↻</span> Repetir animación</button>
+    </div>
+    <div class="kpi-grid report-kpis">
+      <div class="kpi"><div class="l">Reclamos recibidos</div><div class="n">${claims.length}</div></div>
+      <div class="kpi"><div class="l">Resueltos</div><div class="n">${resueltos} <small>${porcentaje}% del total</small></div></div>
+      <div class="kpi"><div class="l">En gestión</div><div class="n">${claims.length - resueltos}</div></div>
+    </div>
+    ${claims.length ? "" : '<p class="dashboard-note" role="status">Todavía no hay reclamos para esta selección.</p>'}
+    <div class="stats-grid dashboard-grid" id="stats-charts">
+      <article class="panel panel-pad chart-panel chart-pending"><h3 tabindex="-1">Evolución de reclamos</h3><p class="muted">Ingresados y actualmente resueltos, por mes de publicación.</p>${trendChart(months)}</article>
+      <article class="panel panel-pad chart-panel chart-pending"><h3>Estado de los reclamos</h3><p class="muted">Elegí un estado para destacarlo.</p>${statusChart(statuses, claims.length)}</article>
+      <article class="panel panel-pad chart-panel chart-pending"><h3>Por categoría</h3><p class="muted">Los temas que más reportaron los vecinos.</p>
+        <div class="bars" data-chart-plot>${byCat.map((c, i) => `<div class="bar-row"><span class="nm">${c.label}</span><span class="bar-track"><i class="chart-bar" style="--c:${c.color};width:${c.n / maxCat * 100}%;--chart-delay:${CHART_LEAD_MS + i * 62}ms"></i></span><span class="val chart-value" style="--value-delay:${CHART_LEAD_MS + 970 + i * 62}ms">${c.n}</span></div>`).join("")}</div>
+      </article>
+      <article class="panel panel-pad chart-panel chart-pending"><h3>Por barrio</h3><p class="muted">Volumen de reclamos y avance en cada barrio.</p>
+        <div class="bars" data-chart-plot>${byBarrio.map(({ label, n, states }, i) => `<div class="bar-row"><span class="nm">${esc(label)}</span><span class="bar-track stacked-track" role="img" aria-label="${states.map((st) => `${st.label}: ${st.n}`).join(". ")}">
+          <span class="stacked-fill">${neighborhoodBar(states, maxBarrio, CHART_LEAD_MS + i * 62)}</span>
+        </span><span class="val">${n}</span></div>`).join("")}</div>
+        <ul class="chart-legend chart-legend-inline">${CHART_STATES.map(({ label, color }) => `<li><i style="--series:${color}"></i><span>${label}</span></li>`).join("")}</ul>
+      </article>
     </div>
   </div></section>`;
 }
@@ -739,19 +1022,68 @@ function renderPeticiones() {
 }
 
 /* ---------------- Router ---------------- */
+function renderAyuda(terminos) {
+  const title = terminos ? "Términos y condiciones" : "Preguntas frecuentes";
+  const body = terminos
+    ? `<p>AvisAR permite registrar y seguir reclamos vecinales. Los datos se guardan en este navegador.</p><p>Describí el problema con información pertinente y evitá adjuntar datos personales de terceros.</p>`
+    : `<details><summary>¿Cómo publico un reclamo?</summary><p>Ingresá a tu cuenta, elegí una categoría, describí el problema y marcá su ubicación en el mapa.</p></details>
+       <details><summary>¿Dónde consulto el estado?</summary><p>Entrá a <a href="#/mis-reclamos">Mis reclamos</a> y abrí el detalle para ver el estado y las novedades.</p></details>
+       <details><summary>¿Cómo apoyo un reclamo?</summary><p>Abrí su detalle e iniciá sesión para apoyarlo o comentar.</p></details>`;
+  return `<section class="section"><div class="container"><div class="panel panel-pad help-panel"><h1>${title}</h1>${body}</div></div></section>`;
+}
+
 function getRoute() {
   const raw = location.hash.slice(1) || "/";
   const [path, qs] = raw.split("?");
   return { parts: path.split("/").filter(Boolean), params: new URLSearchParams(qs || "") };
 }
 
-function render() {
+const chartObserver = new IntersectionObserver((entries, observer) => {
+  if (document.hidden) return;
+  for (const entry of entries) {
+    if (!entry.isIntersecting || entry.intersectionRatio < .4) continue;
+    entry.target.closest(".chart-panel").classList.replace("chart-pending", "is-chart-visible");
+    observer.unobserve(entry.target);
+  }
+}, { rootMargin: "-58px 0px 0px", threshold: .4 });
+
+function observePendingCharts() {
+  if (document.hidden) return;
+  document.querySelectorAll("#app .chart-pending [data-chart-plot]").forEach((plot) => {
+    chartObserver.unobserve(plot);
+    chartObserver.observe(plot);
+  });
+}
+
+function playViewEffects() {
+  observePendingCharts();
+  document.querySelector("#app .is-success-pending")?.classList.replace("is-success-pending", "is-success-playing");
+}
+
+function replayCharts() {
+  const charts = document.getElementById("stats-charts");
+  chartObserver.disconnect();
+  charts.querySelectorAll(".is-chart-visible").forEach((chart) => {
+    chart.classList.replace("is-chart-visible", "chart-pending");
+  });
+  charts.querySelector("h3").focus({ preventScroll: true });
+  charts.scrollIntoView({ block: "start" });
+  observePendingCharts();
+}
+
+function render({ deferMotion = false, fallbackTransition = false } = {}) {
+  chartObserver.disconnect();
+  liveMaps.splice(0).forEach((map) => map.destroy());
+  mapConfigs.length = 0;
   const { parts } = getRoute();
   const view = parts[0] || "home";
   let html = "";
   switch (view) {
     case "home": html = renderHome(); break;
     case "reclamos": html = renderReclamos(); break;
+    case "ver-reclamos": html = renderVerReclamos(); break;
+    case "preguntas": html = renderAyuda(false); break;
+    case "terminos": html = renderAyuda(true); break;
     case "reclamo": html = renderReclamo(parts[1]); break;
     case "crear": html = renderCrear(); break;
     case "enviado": html = renderEnviado(parts[1]); break;
@@ -767,8 +1099,24 @@ function render() {
     case "peticiones": html = renderPeticiones(); break;
     default: html = `<section class="section"><div class="container"><div class="empty"><p style="font-weight:700;color:var(--ink)">Página no encontrada</p><a class="btn btn-ghost" href="#/" style="margin-top:12px">Volver al inicio</a></div></div></section>`;
   }
-  document.getElementById("app").innerHTML = html;
+  const app = document.getElementById("app");
+  const queueScroll = app.querySelector(".municipal-list")?.scrollTop || 0;
+  app.classList.toggle("view-arriving", fallbackTransition);
+  app.dataset.path = location.hash.split("?")[0] || "#/";
+  app.innerHTML = html;
+  const queue = app.querySelector(".municipal-list");
+  const selected = queue?.querySelector("a[aria-current]");
+  if (selected) {
+    queue.scrollTop = queueScroll;
+    if (selected.offsetTop < queue.scrollTop || selected.offsetTop + selected.offsetHeight > queue.scrollTop + queue.clientHeight) {
+      queue.scrollTop = selected.offsetTop - 12;
+    }
+  }
+  app.querySelectorAll("[data-claim-map]").forEach((stage) => {
+    liveMaps.push(new ClaimMap(stage, mapConfigs[Number(stage.dataset.claimMap)]));
+  });
   updateShell(view);
+  if (!deferMotion) playViewEffects();
 }
 
 /* ---------------- Acciones ---------------- */
@@ -788,25 +1136,48 @@ function requireLogin(nextHash) {
   return false;
 }
 
-function loginDemo(email, nombre) {
-  state.session = { logged: true, email, nombre: nombre || email.split("@")[0].replace(/[._-]/g, " ").replace(/\b\w/g, (m) => m.toUpperCase()) };
+function accountNotifications() {
+  if (!state.session.logged || state.session.novedades === false) return [];
+  return state.notifications.filter((n) => (n.recipient || getClaim(n.ref)?.owner) === state.session.email);
+}
+
+function saveProfile() {
+  const { logged, ...profile } = state.session;
+  state.profiles = state.profiles.filter((p) => p.email !== profile.email);
+  state.profiles.push(profile);
   save();
+}
+
+function loginDemo(email, nombre, details = {}) {
+  const knownEmail = state.profiles.find((p) => p.email.toLowerCase() === email.toLowerCase())?.email
+    || state.claims.find((c) => c.owner?.toLowerCase() === email.toLowerCase())?.owner;
+  email = knownEmail || email.toLowerCase();
+  state.session = { logged: true, email, nombre: nombre || email.split("@")[0].replace(/[._-]/g, " ").replace(/\b\w/g, (m) => m.toUpperCase()) };
+  Object.assign(state.session, state.profiles.find((p) => p.email === email), details);
+  saveProfile();
   const { params } = getRoute();
   const next = params.get("next");
   location.hash = next && next.startsWith("#") ? next : "#/";
   toast("¡Bienvenido/a, " + state.session.nombre + "!");
 }
 
+const mobileSidenav = matchMedia("(max-width:900px)");
+
+function setSidenav(open) {
+  const activeClass = mobileSidenav.matches ? "sidenav-open" : "sidenav-pinned";
+  document.body.classList.toggle(activeClass, open);
+  document.getElementById("menuToggle").setAttribute("aria-expanded", String(open));
+  document.getElementById("sidenav").inert = mobileSidenav.matches && !open;
+}
+
 function toggleSidenav() {
-  if (window.matchMedia("(max-width:900px)").matches) {
-    const open = document.body.classList.toggle("sidenav-open");
-    const btn = document.getElementById("menuToggle");
-    if (btn) btn.setAttribute("aria-expanded", open ? "true" : "false");
-  } else {
-    state.ui.collapsed = !state.ui.collapsed;
-    document.body.classList.toggle("sidenav-collapsed", state.ui.collapsed);
-    save();
-  }
+  const activeClass = mobileSidenav.matches ? "sidenav-open" : "sidenav-pinned";
+  setSidenav(!document.body.classList.contains(activeClass));
+}
+
+function resetSidenav() {
+  document.body.classList.remove("sidenav-open", "sidenav-pinned");
+  setSidenav(false);
 }
 
 function supportClaim(id) {
@@ -815,7 +1186,7 @@ function supportClaim(id) {
   if (!c || state.supported.includes(id)) return;
   c.apoyos++;
   state.supported.push(id);
-  state.notifications.unshift({ id: "n" + Date.now(), tipo: "apoyo", titulo: "Apoyo registrado", texto: `Apoyaste "${c.titulo}".`, fecha: new Date().toISOString().slice(0, 10), leida: false, ref: c.id });
+  state.notifications.unshift({ id: "n" + Date.now(), tipo: "apoyo", recipient: state.session.email, titulo: "Apoyo registrado", texto: `Apoyaste "${c.titulo}".`, fecha: new Date().toISOString().slice(0, 10), leida: false, ref: c.id });
   save(); render(); toast("¡Gracias! Tu apoyo quedó registrado.");
 }
 
@@ -856,29 +1227,39 @@ function readFileAsDataURL(file) {
   });
 }
 
+function toggleChartSeries(button) {
+  const chart = button.closest(".chart-panel");
+  const active = button.getAttribute("aria-pressed") === "true";
+  if (active && chart.querySelectorAll('[data-series-toggle][aria-pressed="true"]').length === 1) return;
+  button.setAttribute("aria-pressed", String(!active));
+  chart.querySelector(`[data-chart-series="${button.dataset.seriesToggle}"]`).classList.toggle("is-muted", active);
+}
+
+function highlightChartStatus(button) {
+  const chart = button.closest(".chart-panel");
+  const active = button.getAttribute("aria-pressed") === "true";
+  const status = active ? "" : button.dataset.statusToggle;
+  chart.querySelectorAll("[data-status-toggle]").forEach((item) => {
+    item.setAttribute("aria-pressed", String(item.dataset.statusToggle === status));
+  });
+  chart.querySelectorAll("[data-status-slice]").forEach((slice) => {
+    slice.classList.toggle("is-muted", Boolean(status) && slice.dataset.statusSlice !== status);
+  });
+  const count = chart.querySelector(".donut-count");
+  count.textContent = status ? button.dataset.count : count.dataset.total;
+}
+
 /* ---------------- Eventos: click ---------------- */
 document.addEventListener("click", (e) => {
   const t = e.target;
+  if (t.closest('[data-action="replay-charts"]')) { replayCharts(); return; }
+  const seriesToggle = t.closest("[data-series-toggle]");
+  if (seriesToggle) { toggleChartSeries(seriesToggle); return; }
+  const statusToggle = t.closest("[data-status-toggle]");
+  if (statusToggle) { highlightChartStatus(statusToggle); return; }
   if (t.closest("#menuToggle")) { toggleSidenav(); return; }
-  if (t.closest("#collapseBtn")) { state.ui.collapsed = !state.ui.collapsed; document.body.classList.toggle("sidenav-collapsed", state.ui.collapsed); save(); return; }
-  if (t.closest("#sidenavBackdrop")) { document.body.classList.remove("sidenav-open"); return; }
-  if (t.closest(".snav-item") && window.matchMedia("(max-width:900px)").matches) document.body.classList.remove("sidenav-open");
-
-  const pick = t.closest('[data-action="pick-map"]');
-  if (pick) {
-    const rect = pick.getBoundingClientRect();
-    const xPct = clamp(((e.clientX - rect.left) / rect.width) * 100, 1, 99);
-    const yPct = clamp(((e.clientY - rect.top) / rect.height) * 100, 1, 99);
-    const ll = pctToLatlng(xPct, yPct);
-    draftLatLng = ll;
-    draftBarrio = nearestBarrio(ll.lat, ll.lng);
-    draftPicked = true;
-    const pin = document.getElementById("draftPin");
-    if (pin) { pin.style.left = xPct.toFixed(3) + "%"; pin.style.top = yPct.toFixed(3) + "%"; }
-    const label = document.getElementById("draftBarrio");
-    if (label) label.innerHTML = `Ubicación elegida: <strong>${esc(draftBarrio)}</strong> · ${ll.lat.toFixed(5)}, ${ll.lng.toFixed(5)}`;
-    return;
-  }
+  if (t.closest("#sidenavBackdrop")) { setSidenav(false); return; }
+  if (t.closest(".snav-item") && mobileSidenav.matches) setSidenav(false);
 
   const supportBtn = t.closest('[data-action="support"]');
   if (supportBtn) { supportClaim(supportBtn.dataset.id); return; }
@@ -887,10 +1268,10 @@ document.addEventListener("click", (e) => {
   const copyBtn = t.closest('[data-action="copy-letter"]');
   if (copyBtn) { const c = getClaim(copyBtn.dataset.id); if (c) copyText(letterText(c)); return; }
   if (t.closest('[data-action="close-modal"]')) { closeModal(t); return; }
-  if (t.closest('[data-action="demo-social"]')) { loginDemo("vecino.demo@avisar.gob.ar", "Vecino Demo"); return; }
+  if (t.closest('[data-action="demo-social"]')) { loginDemo("vecino.demo@avisar.gob.ar", "Vecino"); return; }
   if (t.closest('[data-action="logout"]')) { state.session = { logged: false, email: "", nombre: "" }; save(); render(); toast("Cerraste sesión."); return; }
-  if (t.closest('[data-action="forgot"]')) { toast("Te enviamos un correo para restablecer tu contraseña (demo)."); return; }
-  if (t.closest('[data-action="mark-all"]')) { state.notifications.forEach((n) => (n.leida = true)); save(); render(); toast("Notificaciones marcadas como leídas."); return; }
+  if (t.closest('[data-action="forgot"]')) { toast("La recuperación por correo no está habilitada."); return; }
+  if (t.closest('[data-action="mark-all"]')) { accountNotifications().forEach((n) => (n.leida = true)); save(); render(); toast("Notificaciones marcadas como leídas."); return; }
 
   const notif = t.closest(".notif-item");
   if (notif) { const n = state.notifications.find((x) => x.id === notif.dataset.id); if (n && !n.leida) { n.leida = true; save(); } }
@@ -898,6 +1279,22 @@ document.addEventListener("click", (e) => {
 
 /* ---------------- Eventos: change ---------------- */
 document.addEventListener("change", (e) => {
+  if (e.target.id === "mapStatus") {
+    const { params } = getRoute();
+    if (e.target.value === "todos") params.delete("estado");
+    else params.set("estado", e.target.value);
+    location.hash = "#/mapa" + (params.size ? "?" + params.toString() : "");
+  }
+  if (e.target.id === "statsPeriod" || e.target.id === "statsBarrio") {
+    const { params } = getRoute();
+    const key = e.target.id === "statsPeriod" ? "periodo" : "barrio";
+    if (e.target.value) params.set(key, e.target.value);
+    else params.delete(key);
+    location.hash = "#/estadisticas" + (params.size ? "?" + params.toString() : "");
+  }
+  if (e.target.id === "foto") {
+    document.getElementById("uploadName").textContent = e.target.files[0]?.name || "Imagen o video · Hasta 1,2 MB · Opcional";
+  }
   if (e.target.id === "categoria") {
     draftCat = e.target.value;
     const pin = document.getElementById("draftPin");
@@ -940,31 +1337,51 @@ document.addEventListener("submit", (e) => {
   if (kind === "crear") {
     if (!state.session.logged) { requireLogin("#/crear"); return; }
     const data = new FormData(form);
-    const categoria = data.get("categoria") || "infraestructura";
+    const categoria = data.get("categoria");
+    if (!Object.hasOwn(REPORT_CATEGORIES, categoria)) { toast("Elegí una categoría."); return; }
     const descripcion = String(data.get("descripcion") || "").trim();
     if (descripcion.length < 20) { toast("La descripción debe tener al menos 20 caracteres."); return; }
     if (!draftPicked) { toast("Marcá la ubicación exacta en el mapa."); return; }
     const file = form.querySelector('input[type="file"]')?.files[0];
+    if (file && (file.size > 1200000 || !/^(image|video)\//.test(file.type))) {
+      toast("Elegí una imagen o un video de hasta 1,2 MB.");
+      return;
+    }
+    const owner = state.session.email;
+    const { lat, lng } = draftLatLng;
+    const barrio = draftBarrio;
+    const submit = form.querySelector('button[type="submit"]');
+    if (submit.disabled) return;
+    submit.disabled = true;
     readFileAsDataURL(file).then((foto) => {
+      submit.disabled = false;
+      if (!form.isConnected || owner !== state.session.email) return;
+      if (file && !foto) { toast("No se pudo leer el archivo. Volvé a elegirlo."); return; }
       const id = "r" + Date.now();
-      const lat = draftLatLng.lat, lng = draftLatLng.lng;
       const claim = {
         id,
         numero: "F-" + (15300 + Math.floor(Math.random() * 700)),
         titulo: descripcion.length > 64 ? descripcion.slice(0, 61).trim() + "…" : descripcion,
-        categoria, barrio: draftBarrio, direccion: `${draftBarrio} · ${lat.toFixed(5)}, ${lng.toFixed(5)}`,
+        categoria, barrio, direccion: `${barrio} · ${lat.toFixed(5)}, ${lng.toFixed(5)}`,
         descripcion, fecha: new Date().toISOString().slice(0, 10), apoyos: 0, estado: "abierto",
-        verificado: false, evidencia: "", foto, owner: state.session.email, comentarios: [],
+        verificado: false, evidencia: "", foto, owner, comentarios: [],
         lat, lng,
       };
       state.claims.unshift(claim);
       state.notifications.unshift({ id: "n" + Date.now(), tipo: "sistema", titulo: "Reclamo enviado", texto: `Tu reclamo #${claim.numero} fue publicado en el mapa.`, fecha: claim.fecha, leida: false, ref: id });
+      try {
+        localStorage.setItem(STORE_KEY, JSON.stringify(state));
+      } catch {
+        state.claims.shift();
+        state.notifications.shift();
+        toast("No se pudo guardar el reclamo. Probá con un archivo más chico.");
+        return;
+      }
       draftPicked = false;
+      draftCat = "";
       draftLatLng = { lat: VL_CENTER[0], lng: VL_CENTER[1] };
       draftBarrio = nearestBarrio(draftLatLng.lat, draftLatLng.lng);
-      save();
       location.hash = "#/enviado/" + id;
-      toast("Reclamo enviado con éxito.");
     });
     return;
   }
@@ -978,7 +1395,32 @@ document.addEventListener("submit", (e) => {
     if (email !== email2) { toast("Los emails no coinciden."); return; }
     if (pass !== pass2) { toast("Las contraseñas no coinciden."); return; }
     if (pass.length < 6) { toast("La contraseña debe tener al menos 6 caracteres."); return; }
-    loginDemo(email); return;
+    loginDemo(email, undefined, { celular: String(data.get("celular") || "").trim() }); return;
+  }
+
+  if (kind === "perfil") {
+    if (!state.session.logged) return;
+    const data = new FormData(form);
+    const nombre = String(data.get("nombre") || "").trim();
+    if (!nombre) { toast("Ingresá tu nombre."); return; }
+    const previousEmail = state.session.email;
+    const email = String(data.get("email") || "").trim().toLowerCase();
+    if (email !== previousEmail) {
+      const emailInUse = state.profiles.some((p) => p.email.toLowerCase() === email && p.email !== previousEmail)
+        || state.claims.some((c) => c.owner?.toLowerCase() === email && c.owner !== previousEmail);
+      if (emailInUse) { toast("Ya existe una cuenta con ese correo."); return; }
+      state.profiles = state.profiles.filter((p) => p.email !== previousEmail);
+      state.claims.forEach((c) => { if (c.owner === previousEmail) c.owner = email; });
+      state.notifications.forEach((n) => { if (n.recipient === previousEmail) n.recipient = email; });
+    }
+    Object.assign(state.session, {
+      email, nombre,
+      barrio: data.get("barrio"),
+      celular: String(data.get("celular") || "").trim(),
+      novedades: data.has("novedades"),
+      correo: data.has("correo"),
+    });
+    saveProfile(); render(); toast("Cambios guardados."); return;
   }
 
   if (kind === "login") {
@@ -989,6 +1431,11 @@ document.addEventListener("submit", (e) => {
     loginDemo(email); return;
   }
 
+  if (kind === "municipal-search") {
+    location.hash = municipalURL(form.dataset.queue, String(new FormData(form).get("q") || "").trim());
+    return;
+  }
+
   if (kind === "municipal") {
     const c = getClaim(form.dataset.id); if (!c) return;
     const data = new FormData(form);
@@ -996,7 +1443,15 @@ document.addEventListener("submit", (e) => {
     const verificado = data.get("verificado") === "on";
     const evidencia = String(data.get("evidencia") || "").trim();
     const respuesta = String(data.get("respuesta") || "").trim();
-    if (nuevoEstado === "resuelto" && !evidencia) { toast("Para marcar como resuelto necesitás cargar evidencia."); return; }
+    if (nuevoEstado === "resuelto" && !evidencia) {
+      form.elements.evidencia.focus();
+      toast("Para marcar como resuelto necesitás cargar evidencia.");
+      return;
+    }
+    const previousState = c.estado;
+    if (nuevoEstado !== previousState || evidencia !== c.evidencia) c.evidenciaFoto = "";
+    if (nuevoEstado !== "resuelto") c.fechaResolucion = "";
+    else if (previousState !== "resuelto" || !c.fechaResolucion) c.fechaResolucion = new Date().toISOString().slice(0, 10);
     c.estado = nuevoEstado; c.verificado = verificado; c.evidencia = evidencia;
     if (respuesta) c.comentarios.push({ autor: "Municipio de Vicente López", texto: respuesta, fecha: new Date().toISOString().slice(0, 10), muni: true });
     state.notifications.unshift({ id: "n" + Date.now(), tipo: "municipio", titulo: "Actualización del municipio", texto: `El municipio actualizó "${c.titulo}".`, fecha: new Date().toISOString().slice(0, 10), leida: false, ref: c.id });
@@ -1005,12 +1460,61 @@ document.addEventListener("submit", (e) => {
 });
 
 /* ---------------- Init ---------------- */
-window.addEventListener("hashchange", () => {
-  render();
-  window.scrollTo({ top: 0, behavior: "auto" });
-  document.body.classList.remove("sidenav-open");
-});
-window.addEventListener("resize", () => { /* layout responsive sin mapas externos */ });
+let routeRevision = 0;
+let routeTransition;
 
-if (state.ui && state.ui.collapsed) document.body.classList.add("sidenav-collapsed");
+window.addEventListener("hashchange", (event) => {
+  const revision = ++routeRevision;
+  routeTransition?.skipTransition();
+  routeTransition = undefined;
+  const [oldPath, oldQuery] = new URL(event.oldURL).hash.split("?");
+  const [path, query] = location.hash.split("?");
+  const previous = new URLSearchParams(oldQuery);
+  const current = new URLSearchParams(query);
+  const app = document.getElementById("app");
+  const viewChanged = app.dataset.path !== (path || "#/");
+  const useTransition = viewChanged && typeof document.startViewTransition === "function";
+
+  const update = () => {
+    if (revision !== routeRevision) return;
+    render({ deferMotion: useTransition, fallbackTransition: viewChanged && !useTransition });
+    const isListPage = path === "#/reclamos" || path === "#/ver-reclamos";
+    const pageChanged = isListPage && oldPath === path && previous.get("pagina") !== current.get("pagina");
+    const editorSelected = mobileSidenav.matches && path === "#/municipal" && current.has("id") && previous.get("id") !== current.get("id");
+    const target = pageChanged ? document.getElementById("claim-results")
+      : editorSelected ? document.getElementById("municipal-editor-title") : null;
+    if (target) {
+      target.focus({ preventScroll: true });
+      target.scrollIntoView({ block: "start" });
+    } else {
+      window.scrollTo({ top: 0, behavior: "auto" });
+    }
+    if (mobileSidenav.matches) setSidenav(false);
+  };
+
+  if (!useTransition) {
+    update();
+    return;
+  }
+  const transition = document.startViewTransition(update);
+  routeTransition = transition;
+  transition.ready.catch(() => {});
+  const finish = () => {
+    if (revision !== routeRevision) return;
+    routeTransition = undefined;
+    playViewEffects();
+  };
+  transition.finished.then(finish, finish);
+});
+document.addEventListener("visibilitychange", () => {
+  if (!routeTransition) observePendingCharts();
+});
+mobileSidenav.addEventListener("change", resetSidenav);
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && (document.body.classList.contains("sidenav-open") || document.body.classList.contains("sidenav-pinned"))) {
+    setSidenav(false);
+    document.getElementById("menuToggle").focus();
+  }
+});
+resetSidenav();
 render();
