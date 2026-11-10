@@ -1061,6 +1061,10 @@ const CHART_STATES = [
   { key: "resuelto", label: "Resueltos", color: "#327452" },
 ];
 
+function chartMark(label) {
+  return `data-chart-value="${esc(label)}" tabindex="0" aria-label="${esc(label)}"`;
+}
+
 function trendChart(months) {
   const tick = Math.max(1, Math.ceil(Math.max(...months.map((m) => m.n)) / 4));
   const x = (i) => months.length === 1 ? 232 : 38 + i * (388 / (months.length - 1));
@@ -1078,9 +1082,9 @@ function trendChart(months) {
       <polyline class="trend-stroke" points="${path(key)}" pathLength="100" fill="none" stroke="#fff" stroke-width="8" stroke-linecap="round" stroke-linejoin="round" style="--draw-delay:${start}ms;--draw-duration:${CHART_TRACE_MS}ms"/>
     </mask></defs>
     <polyline points="${path(key)}" mask="url(#${maskId})" fill="none" stroke="${color}" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="${dash}"/>
-    ${points.map(({ month, i, distance: position }) => `<circle class="trend-point" cx="${x(i)}" cy="${y(month[key])}" r="4.5" fill="${color}" style="--point-color:${color};--point-delay:${Math.round(start + CHART_TRACE_MS * (position / (distance || 1)))}ms"><title>${month.label} · ${month[key]}</title></circle>`).join("")}`;
+    ${points.map(({ month, i, distance: position }) => `<circle class="trend-point" ${chartMark(month.n === month.done ? `${month.label} · ${month.n} ingresados y ${month.done} resueltos` : `${month.label} · ${month[key]} ${key === "n" ? "ingresados" : "resueltos"}`)} cx="${x(i)}" cy="${y(month[key])}" r="4.5" fill="${color}" style="--point-color:${color};--point-delay:${Math.round(start + CHART_TRACE_MS * (position / (distance || 1)))}ms"></circle>`).join("")}`;
   };
-  return `<svg class="stats-chart" data-chart-plot viewBox="0 0 460 178" role="img" aria-label="${months.map((m) => `${m.label}: ${m.n} ingresados, ${m.done} resueltos`).join(". ")}">
+  return `<svg class="stats-chart" data-chart-plot viewBox="0 0 460 178" role="group" aria-label="${months.map((m) => `${m.label}: ${m.n} ingresados, ${m.done} resueltos`).join(". ")}">
     ${[0, 1, 2, 3, 4].map((step) => `<line x1="38" x2="426" y1="${y(tick * step)}" y2="${y(tick * step)}" stroke="var(--line)"/><text x="26" y="${y(tick * step) + 4}" text-anchor="end">${tick * step}</text>`).join("")}
     <g class="trend-ink">
       <g data-chart-series="n">
@@ -1100,13 +1104,13 @@ function statusChart(statuses, total) {
   let offset = 0;
   const slices = statuses.filter(({ n }) => n > 0).map(({ key, label, color, n }) => {
     const share = n / total * 100;
-    const slice = `<circle data-status-slice="${key}" cx="62" cy="62" r="48" pathLength="100" fill="none" stroke="${color}" stroke-width="13"
-      stroke-dashoffset="${-offset}" style="--arc-share:${share};--arc-delay:${CHART_LEAD_MS + Math.round(offset * 16)}ms;--arc-duration:${Math.max(75, Math.round(share * 16))}ms"><title>${label} · ${n}</title></circle>`;
+    const slice = `<circle data-status-slice="${key}" ${chartMark(`${label} · ${n} (${Math.round(share)} %)`)} cx="62" cy="62" r="48" pathLength="100" fill="none" stroke="${color}" stroke-width="13"
+      stroke-dashoffset="${-offset}" style="--arc-share:${share};--arc-delay:${CHART_LEAD_MS + Math.round(offset * 16)}ms;--arc-duration:${Math.max(75, Math.round(share * 16))}ms"></circle>`;
     offset += share;
     return slice;
   }).join("");
   return `<div class="status-chart-body">
-    <svg class="status-donut" data-chart-plot viewBox="0 0 124 124" role="img" aria-label="${statuses.map((item) => `${item.label}: ${item.n}`).join(". ")}">
+    <svg class="status-donut" data-chart-plot viewBox="0 0 124 124" role="group" aria-label="${statuses.map((item) => `${item.label}: ${item.n}`).join(". ")}">
       <circle cx="62" cy="62" r="48" fill="none" stroke="var(--line)" stroke-width="13"/>
       <g class="donut-slices" transform="rotate(-90 62 62)">${slices}</g>
       <text class="donut-count" x="62" y="60" text-anchor="middle" data-total="${total}">${total}</text><text class="donut-caption" x="62" y="78" text-anchor="middle">reclamos</text>
@@ -1115,12 +1119,12 @@ function statusChart(statuses, total) {
   </div>`;
 }
 
-function neighborhoodBar(states, max, rowDelay) {
+function neighborhoodBar(label, states, max, rowDelay) {
   let elapsed = rowDelay;
   return states.filter((state) => state.n > 0).map((state) => {
     const width = state.n / max;
     const duration = Math.max(80, Math.round(width * 1280));
-    const segment = `<span class="stacked-segment" title="${state.label}: ${state.n}" style="--series:${state.color};width:${width * 100}%;--segment-delay:${elapsed}ms;--segment-duration:${duration}ms"></span>`;
+    const segment = `<span class="stacked-segment" ${chartMark(`${label} · ${state.label}: ${state.n}`)} style="--series:${state.color};width:${width * 100}%;--segment-delay:${elapsed}ms;--segment-duration:${duration}ms"></span>`;
     elapsed += duration;
     return segment;
   }).join("");
@@ -1175,11 +1179,11 @@ function renderEstadisticas() {
       <article class="panel panel-pad chart-panel chart-pending"><h3 tabindex="-1">Evolución de reclamos</h3><p class="muted">Ingresados y actualmente resueltos, por mes de publicación.</p>${trendChart(months)}</article>
       <article class="panel panel-pad chart-panel chart-pending"><h3>Estado de los reclamos</h3><p class="muted">Elegí un estado para destacarlo.</p>${statusChart(statuses, claims.length)}</article>
       <article class="panel panel-pad chart-panel chart-pending"><h3>Por categoría</h3><p class="muted">Los temas que más reportaron los vecinos.</p>
-        <div class="bars" data-chart-plot>${byCat.map((c, i) => `<div class="bar-row"><span class="nm">${c.label}</span><span class="bar-track"><i class="chart-bar" style="--c:${c.color};width:${c.n / maxCat * 100}%;--chart-delay:${CHART_LEAD_MS + i * 62}ms"></i></span><span class="val chart-value" style="--value-delay:${CHART_LEAD_MS + 970 + i * 62}ms">${c.n}</span></div>`).join("")}</div>
+        <div class="bars" data-chart-plot>${byCat.map((c, i) => `<div class="bar-row"><span class="nm">${c.label}</span><span class="bar-track" ${chartMark(`${c.label} · ${c.n} ${c.n === 1 ? "reclamo" : "reclamos"}`)}><i class="chart-bar" style="--c:${c.color};width:${c.n / maxCat * 100}%;--chart-delay:${CHART_LEAD_MS + i * 62}ms"></i></span><span class="val chart-value" style="--value-delay:${CHART_LEAD_MS + 970 + i * 62}ms">${c.n}</span></div>`).join("")}</div>
       </article>
       <article class="panel panel-pad chart-panel chart-pending"><h3>Por barrio</h3><p class="muted">Volumen de reclamos y avance en cada barrio.</p>
-        <div class="bars" data-chart-plot>${byBarrio.map(({ label, n, states }, i) => `<div class="bar-row"><span class="nm">${esc(label)}</span><span class="bar-track stacked-track" role="img" aria-label="${states.map((st) => `${st.label}: ${st.n}`).join(". ")}">
-          <span class="stacked-fill">${neighborhoodBar(states, maxBarrio, CHART_LEAD_MS + i * 62)}</span>
+        <div class="bars" data-chart-plot>${byBarrio.map(({ label, n, states }, i) => `<div class="bar-row"><span class="nm">${esc(label)}</span><span class="bar-track stacked-track" role="group" aria-label="${states.map((st) => `${st.label}: ${st.n}`).join(". ")}">
+          <span class="stacked-fill">${neighborhoodBar(label, states, maxBarrio, CHART_LEAD_MS + i * 62)}</span>
         </span><span class="val">${n}</span></div>`).join("")}</div>
         <ul class="chart-legend chart-legend-inline">${CHART_STATES.map(({ label, color }) => `<li><i style="--series:${color}"></i><span>${label}</span></li>`).join("")}</ul>
       </article>
@@ -1313,6 +1317,7 @@ function render({ deferMotion = false, fallbackTransition = false } = {}) {
   const queueScroll = app.querySelector(".municipal-list")?.scrollTop || 0;
   app.classList.toggle("view-arriving", fallbackTransition);
   app.dataset.path = location.hash.split("?")[0] || "#/";
+  hideChartTooltip();
   app.innerHTML = html;
   const queue = app.querySelector(".municipal-list");
   const selected = queue?.querySelector("a[aria-current]");
@@ -1436,6 +1441,51 @@ function readFileAsDataURL(file) {
     r.readAsDataURL(file);
   });
 }
+
+const chartTooltip = document.getElementById("chart-tooltip");
+let chartTarget;
+
+function hideChartTooltip() {
+  chartTarget?.classList.remove("is-chart-hovered");
+  chartTarget = null;
+  chartTooltip.hidden = true;
+}
+
+function showChartTooltip(target, x, y) {
+  if (!target || !target.closest(".is-chart-visible")) return;
+  if (target !== chartTarget) {
+    hideChartTooltip();
+    chartTarget = target;
+    target.classList.add("is-chart-hovered");
+    chartTooltip.textContent = target.dataset.chartValue;
+    chartTooltip.hidden = false;
+  }
+  const { offsetWidth: width, offsetHeight: height } = chartTooltip;
+  chartTooltip.style.left = Math.max(8, Math.min(x - width / 2, innerWidth - width - 8)) + "px";
+  chartTooltip.style.top = (y - height - 12 >= 8 ? y - height - 12 : y + 12) + "px";
+}
+
+document.addEventListener("pointerover", (event) => {
+  const target = event.target.closest("[data-chart-value]");
+  showChartTooltip(target, event.clientX, event.clientY);
+});
+document.addEventListener("pointerout", (event) => {
+  if (chartTarget?.contains(event.target) && !chartTarget.contains(event.relatedTarget)) hideChartTooltip();
+});
+document.addEventListener("focusin", (event) => {
+  const target = event.target.closest("[data-chart-value]");
+  if (!target) return;
+  const box = target.getBoundingClientRect();
+  showChartTooltip(target, box.left + box.width / 2, box.top);
+});
+document.addEventListener("focusout", (event) => {
+  if (event.target === chartTarget) hideChartTooltip();
+});
+document.addEventListener("scroll", hideChartTooltip, { capture: true, passive: true });
+window.addEventListener("resize", hideChartTooltip);
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") hideChartTooltip();
+});
 
 function toggleChartSeries(button) {
   const chart = button.closest(".chart-panel");

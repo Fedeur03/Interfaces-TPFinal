@@ -1007,3 +1007,16 @@ a.page-link:hover { background: var(--primary-soft); border-color: #9fb1a5; }
 .address-feedback { min-height: 1.3em; color: var(--primary-dark); }
 .address-choices[hidden] { display: none; }
 .address-choices { margin-bottom: 3px; }
+
+.chart-tooltip {
+  position: fixed; z-index: 100; pointer-events: none; max-width: calc(100vw - 16px);
+  padding: 6px 10px; border-radius: 7px; background: #163d32; color: #fff;
+  font-size: .78rem; font-weight: 650; box-shadow: var(--shadow);
+}
+[data-chart-value] { cursor: help; }
+.is-chart-hovered:is(.stacked-segment, [data-status-slice]), .bar-track.is-chart-hovered .chart-bar {
+  filter: brightness(1.16) saturate(1.22);
+}
+.trend-point.is-chart-hovered { r: 7px; filter: drop-shadow(0 0 2px var(--point-color)); }
+[data-status-slice].is-chart-hovered { stroke-width: 17px; }
+[data-chart-value]:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
