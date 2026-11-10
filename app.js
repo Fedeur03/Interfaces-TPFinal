@@ -537,14 +537,30 @@ function renderHome() {
 
   return `
     <section class="home-hero">
-      <div class="container home-hero-grid">
+      <div class="container home-hero-shell">
+        <div class="home-municipal"><img src="assets/municipio-logo.svg" alt="Vicente López" width="168" height="48"><span>Plataforma municipal de participación ciudadana</span></div>
+        <div class="home-hero-grid">
         <div class="home-hero-text">
-          <div class="home-municipal"><img src="assets/municipio-logo.svg" alt="Vicente López" width="168" height="48"><span>Plataforma municipal de participación ciudadana</span></div>
           <h1>¿Qué pasa en <span class="hl">tu barrio</span>?</h1>
           <p class="lead">Si hay una luminaria apagada, un bache o algo que dificulta el paso, marcá el lugar en el mapa. Podés seguir tu reclamo y apoyar el de otro vecino.</p>
           <div class="hero-actions">
             <a class="btn btn-primary" href="#/crear">${icon("plus", 18)} Crear reclamo</a>
             <a class="btn btn-ghost" href="#/ver-reclamos">${icon("search", 17)} Ver reclamos</a>
+          </div>
+          <ol class="home-steps" aria-label="Cómo participar">
+            <li><span>1</span>Marcá el lugar</li>
+            <li><span>2</span>Seguí tu reclamo</li>
+            <li><span>3</span>Apoyá a un vecino</li>
+          </ol>
+          <div class="home-highlights">
+            <article class="home-highlight">
+              <span class="home-highlight-icon">${icon("check", 19)}</span>
+              <div><h2>Seguimiento transparente</h2><p>Consultá el estado, las respuestas y la evidencia del municipio.</p></div>
+            </article>
+            <article class="home-highlight">
+              <span class="home-highlight-icon">${icon("users", 19)}</span>
+              <div><h2>La comunidad suma</h2><p>Con ${THRESHOLD} apoyos, el reclamo habilita una petición colectiva al municipio para pedir una respuesta.</p></div>
+            </article>
           </div>
         </div>
         <div class="home-map-col">
@@ -554,6 +570,7 @@ function renderHome() {
             <div class="map-legend">${mapLegend(REPORT_CATEGORIES)}</div>
           </div>
           <p class="map-caption">${icon("crosshair", 14)} ${total} ${total === 1 ? "reclamo ubicado" : "reclamos ubicados"} en el partido de Vicente López</p>
+        </div>
         </div>
       </div>
     </section>
