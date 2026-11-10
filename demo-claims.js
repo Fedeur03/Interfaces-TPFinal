@@ -12,7 +12,7 @@ const REFERENCE_PHOTOS = {
 };
 
 function referencePhoto(claim) {
-  if (!claim.demo) return null;
+  if (claim.foto && !claim.demo) return null;
   const key = claim.categoria === "infraestructura" ? (/vereda|cordón roto/i.test(claim.titulo) ? "vereda" : "bache")
     : claim.categoria === "espacios_verdes" || /restos de poda/i.test(claim.titulo) ? "ramas"
     : claim.categoria === "otro" && /canilla/i.test(claim.titulo) ? "canilla"
@@ -23,6 +23,116 @@ function referencePhoto(claim) {
 
 function claimPhoto(claim) {
   return referencePhoto(claim)?.src || claim.foto;
+}
+
+function makePetitionClaims() {
+  const initiatives = {
+    "La Lucila": [
+      ["alumbrado", "Iluminar el acceso peatonal a la estación", "Entorno de la estación"],
+      ["espacios_verdes", "Recuperar los bancos del Paseo del Viento", "Paseo del Viento"],
+      ["infraestructura", "Emparejar el sendero hacia la costa", "Entorno de Av. del Libertador"],
+      ["limpieza", "Colocar cestos en el recorrido ribereño", "Paseo de la Costa"],
+      ["transito", "Mejorar la demarcación del cruce hacia la estación", "Centro de La Lucila"],
+      ["desagues", "Limpiar sumideros cerca de la bajada a la costa", "Bajada al río"],
+      ["seguridad", "Reparar el cerco del sendero recreativo", "Corredor ribereño"],
+    ],
+    Olivos: [
+      ["transito", "Reforzar la señalización peatonal en el centro", "Av. Maipú"],
+      ["infraestructura", "Acondicionar veredas de acceso a la plaza", "Plaza Vicente López y Planes"],
+      ["alumbrado", "Revisar las luminarias junto al puerto", "Entorno del Puerto de Olivos"],
+      ["espacios_verdes", "Renovar bancos y sombra en la plaza", "Plaza Vicente López y Planes"],
+      ["limpieza", "Mejorar la recolección en el corredor comercial", "Av. Maipú"],
+      ["desagues", "Despejar rejillas en las calles del puerto", "Zona del puerto"],
+      ["seguridad", "Reponer la baranda del recorrido al río", "Frente costero de Olivos"],
+    ],
+    Florida: [
+      ["infraestructura", "Hacer accesible el recorrido a la estación", "Entorno de la estación Florida"],
+      ["transito", "Renovar las sendas peatonales en San Martín", "Av. San Martín"],
+      ["espacios_verdes", "Recuperar el arbolado de las cuadras escolares", "Centro de Florida"],
+      ["alumbrado", "Cambiar luminarias del corredor de la estación", "Entorno ferroviario"],
+      ["desagues", "Destapar sumideros del corredor comercial", "Av. San Martín"],
+      ["limpieza", "Reforzar el barrido en el entorno de la estación", "Zona de la estación"],
+      ["seguridad", "Asegurar las tapas en el paso peatonal", "Barrio Florida"],
+    ],
+    "Florida Oeste": [
+      ["desagues", "Revisar el drenaje de las calles bajas", "Sector de Av. Mitre"],
+      ["infraestructura", "Reparar el pavimento de acceso al barrio", "Av. Mitre y alrededores"],
+      ["limpieza", "Organizar el retiro de residuos voluminosos", "Centro de Florida Oeste"],
+      ["alumbrado", "Iluminar el acceso al corredor de colectivos", "Av. Mitre"],
+      ["transito", "Repintar los cruces próximos al ferrocarril", "Entorno de la estación"],
+      ["espacios_verdes", "Acondicionar el área de descanso de la plaza", "Plaza barrial"],
+      ["seguridad", "Reponer defensas en el paso peatonal", "Sector ferroviario"],
+    ],
+    Munro: [
+      ["limpieza", "Sumar cestos en el centro comercial de Munro", "Av. Vélez Sarsfield"],
+      ["infraestructura", "Mejorar los accesos al centro cultural", "Centro Cultural Munro"],
+      ["transito", "Ordenar la señalización de las paradas", "Av. Vélez Sarsfield"],
+      ["espacios_verdes", "Recuperar los canteros del centro de Munro", "Centro comercial"],
+      ["alumbrado", "Mejorar la iluminación del paso a la estación", "Entorno ferroviario"],
+      ["desagues", "Limpiar desagües alrededor de la estación", "Entorno de la estación Munro"],
+      ["seguridad", "Reparar el cerramiento del espacio de juegos", "Área recreativa de Munro"],
+    ],
+    "Villa Martelli": [
+      ["alumbrado", "Reponer luces en el ingreso a Villa Martelli", "Entorno de Av. Laprida"],
+      ["transito", "Hacer visible el cruce del corredor de colectivos", "Av. Laprida"],
+      ["desagues", "Verificar los sumideros del acceso barrial", "Entorno de General Paz"],
+      ["limpieza", "Mantener libres las esquinas de residuos", "Sector comercial de Villa Martelli"],
+      ["infraestructura", "Reparar baldosas y rampas del paseo comercial", "Av. Laprida"],
+      ["espacios_verdes", "Renovar el equipamiento de la plaza barrial", "Centro de Villa Martelli"],
+      ["seguridad", "Sustituir la baranda suelta del paso peatonal", "Sector de General Paz"],
+    ],
+    "Villa Adelina": [
+      ["espacios_verdes", "Mejorar senderos y bancos en la plaza", "Sector de Av. Paraná"],
+      ["infraestructura", "Acondicionar las rampas del centro comercial", "Av. Paraná"],
+      ["transito", "Demarcar los cruces usados por estudiantes", "Corredor escolar"],
+      ["desagues", "Mantener los sumideros antes de las lluvias", "Zona de Av. Paraná"],
+      ["alumbrado", "Iluminar el camino hacia las paradas", "Corredor de Av. Paraná"],
+      ["limpieza", "Reforzar el retiro de ramas después de la poda", "Barrio Villa Adelina"],
+      ["seguridad", "Asegurar el perímetro del espacio recreativo", "Plaza barrial"],
+    ],
+    Carapachay: [
+      ["infraestructura", "Reparar el recorrido peatonal hacia la estación", "Entorno de la estación Carapachay"],
+      ["limpieza", "Colocar cestos junto al corredor ferroviario", "Zona de la estación"],
+      ["alumbrado", "Reponer luces alrededor de la plaza", "Centro de Carapachay"],
+      ["transito", "Renovar las señales del cruce principal", "Corredor comercial de Carapachay"],
+      ["espacios_verdes", "Acondicionar los canteros del paseo central", "Centro de Carapachay"],
+      ["desagues", "Limpiar rejillas en las calles residenciales", "Entorno de la estación"],
+      ["seguridad", "Reparar el cerco junto al paso ferroviario", "Corredor ferroviario"],
+    ],
+  };
+  const work = {
+    alumbrado: ["Hay sectores oscuros al atardecer. Pedimos revisar los artefactos y priorizar los accesos peatonales.", "Se repusieron luminarias y se comprobó el encendido del tramo."],
+    espacios_verdes: ["El uso diario deterioró el espacio. Pedimos reparar el equipamiento y despejar las zonas de paso.", "Se reparó el equipamiento y se despejaron los recorridos."],
+    infraestructura: ["El deterioro dificulta la circulación con cochecitos o sillas de ruedas. Pedimos nivelar y reparar el tramo.", "Se reparó el tramo y se verificó la continuidad del paso."],
+    limpieza: ["La acumulación de residuos se repite durante la semana. Pedimos revisar la capacidad y la frecuencia de retiro.", "Se retiraron los residuos y se incorporó el sector al recorrido de mantenimiento."],
+    transito: ["La señalización es poco visible. Pedimos mejorar la demarcación para facilitar un cruce seguro.", "Se renovó la demarcación y se verificó la visibilidad del cruce."],
+    desagues: ["Se acumula agua después de cada lluvia. Pedimos retirar las obstrucciones y revisar el escurrimiento.", "Se retiraron sedimentos y se realizó una prueba de escurrimiento."],
+    seguridad: ["El elemento de protección está deteriorado y el sector tiene circulación diaria. Pedimos repararlo.", "Se repuso el elemento dañado y se comprobó su fijación."],
+  };
+  const today = new Date();
+  const date = (daysAgo) => new Date(today.getFullYear(), today.getMonth(), today.getDate() - daysAgo, 12).toISOString().slice(0, 10);
+  return Object.entries(initiatives).flatMap(([barrio, entries], area) => entries.map(([categoria, titulo, direccion], position) => {
+    const index = area * 7 + position;
+    const estado = ["abierto", "en_proceso", "resuelto"][(area + position) % 3];
+    const closed = estado === "resuelto";
+    const [description, evidence] = work[categoria];
+    const published = 12 + index % 51;
+    const resolvedDate = closed ? date(published - 8) : "";
+    const { lat, lng } = BARRIOS[barrio];
+    return {
+      id: "pet-" + (index + 1), numero: "P-" + (101 + index), demo: true, titulo, categoria, barrio, direccion,
+      descripcion: direccion + ". " + description, fecha: date(published),
+      apoyos: index % 10 === 9 || index === 55 ? 44 + index % 43 : 103 + (index * 31) % 207,
+      estado, verificado: estado !== "abierto", evidencia: closed ? evidence : "",
+      evidenciaFoto: closed ? "assets/reclamos-demo/" + categoria + "-resuelto.svg" : "",
+      fechaResolucion: resolvedDate, foto: "", owner: "",
+      comentarios: estado === "abierto" ? [] : [{
+        autor: "Municipio de Vicente López", muni: true, fecha: date(published - 8),
+        texto: closed ? evidence : "El equipo asignado está relevando el sector para programar la intervención.",
+      }],
+      lat: lat + (position % 3 - 1) * .0013, lng: lng + (Math.floor(position / 3) - 1) * .0014,
+    };
+  }));
 }
 
 

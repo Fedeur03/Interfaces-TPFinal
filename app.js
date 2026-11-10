@@ -2,24 +2,27 @@
 
 const STORE_KEY = "avisar_vl_v2";
 const THRESHOLD = 100;
+const EMPTY_SESSION = { logged: false, email: "", nombre: "" };
+const SESSION_KEY = STORE_KEY + "_session";
+const CATEGORY_COLOR = "#39776d";
 
 const CATEGORIES = {
-  seguridad:       { label: "Seguridad",       color: "#dc2626", icon: "seguridad" },
-  infraestructura: { label: "Infraestructura", color: "#d97706", icon: "infraestructura" },
-  alumbrado:       { label: "Alumbrado",       color: "#ca8a04", icon: "alumbrado" },
-  limpieza:        { label: "Limpieza",        color: "#16a34a", icon: "limpieza" },
-  transito:        { label: "Tránsito",        color: "#2563eb", icon: "transito" },
+  seguridad:       { label: "Seguridad",       color: CATEGORY_COLOR, icon: "seguridad" },
+  infraestructura: { label: "Infraestructura", color: CATEGORY_COLOR, icon: "infraestructura" },
+  alumbrado:       { label: "Alumbrado",       color: CATEGORY_COLOR, icon: "alumbrado" },
+  limpieza:        { label: "Limpieza",        color: CATEGORY_COLOR, icon: "limpieza" },
+  transito:        { label: "Tránsito",        color: CATEGORY_COLOR, icon: "transito" },
 };
 
 const REPORT_CATEGORIES = {
   seguridad: CATEGORIES.seguridad,
   infraestructura: { ...CATEGORIES.infraestructura, label: "Calles y veredas" },
   alumbrado: CATEGORIES.alumbrado,
-  espacios_verdes: { label: "Espacios verdes", color: "#15803d", icon: "pin" },
-  desagues: { label: "Desagües e inundaciones", color: "#0369a1", icon: "pin" },
+  espacios_verdes: { label: "Espacios verdes", color: CATEGORY_COLOR, icon: "tree" },
+  desagues: { label: "Desagües e inundaciones", color: CATEGORY_COLOR, icon: "water" },
   transito: { ...CATEGORIES.transito, label: "Señalización" },
   limpieza: CATEGORIES.limpieza,
-  otro: { label: "Otro", color: "#64748b", icon: "pin" },
+  otro: { label: "Otro", color: CATEGORY_COLOR, icon: "pin" },
 };
 
 const ESTADOS = { abierto: "Abierto", en_proceso: "En proceso", resuelto: "Resuelto" };
@@ -31,6 +34,8 @@ const ICONS = {
   limpieza: '<path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v5"/><path d="M14 11v5"/>',
   transito: '<rect x="8" y="2" width="8" height="20" rx="4"/><circle cx="12" cy="7" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="12" cy="17" r="1.2"/>',
   pin: '<path d="M12 21s-7-5.2-7-11a7 7 0 0 1 14 0c0 5.8-7 11-7 11Z"/><circle cx="12" cy="10" r="2.5"/>',
+  tree: '<path d="M12 22v-5M5 17h14l-4-6h2l-5-8-5 8h2z"/>',
+  water: '<path d="M12 3c3 4 6 7.5 6 11a6 6 0 0 1-12 0c0-3.5 3-7 6-11Z"/>',
   support: '<path d="M7 10v11H4V10h3z"/><path d="M7 10l4-8a2 2 0 0 1 2 2v4h5a2 2 0 0 1 2 2.4l-1.2 6A2 2 0 0 1 16.8 21H7"/>',
   check: '<path d="M20 6L9 17l-5-5"/>',
   clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
@@ -104,11 +109,11 @@ function nearestBarrio(lat, lng) {
 /* ---------------- Estado local ---------------- */
 function defaults() {
   return {
-    claims: makeDemoClaims(),
+    claims: makeDemoClaims().concat(makePetitionClaims()),
     demoSeeded: true,
 
-    supported: [],
-    session: { logged: false, email: "", nombre: "" },
+    supported: {},
+    session: { ...EMPTY_SESSION },
     notifications: [],
     profiles: [],
   };
@@ -119,6 +124,11 @@ function normalizeProfile(profile) {
     return { ...profile, nombre: "Vecino" };
   }
   return profile;
+}
+
+function browserSession() {
+  try { return JSON.parse(sessionStorage.getItem(SESSION_KEY)); }
+  catch { return null; }
 }
 
 function loadState() {
@@ -138,19 +148,25 @@ function loadState() {
           });
           if (!c.numero) c.numero = "F-" + (15300 + Math.floor(Math.random() * 700));
         });
+        const ids = new Set(p.claims.map((claim) => claim.id));
+        const missing = (p.demoSeeded ? makePetitionClaims() : makeDemoClaims().concat(makePetitionClaims()))
+          .filter((sample) => !ids.has(sample.id));
+        const session = normalizeProfile(browserSession() || p.session) || { ...EMPTY_SESSION };
         return {
-          claims: p.demoSeeded ? p.claims : p.claims.concat(makeDemoClaims().filter((sample) => !p.claims.some((c) => c.id === sample.id))),
+          claims: p.claims.concat(missing),
           demoSeeded: true,
 
-          supported: p.supported || [],
-          session: normalizeProfile(p.session) || { logged: false, email: "", nombre: "" },
+          supported: Array.isArray(p.supported) ? { [session.email]: p.supported } : p.supported || {},
+          session,
           notifications: Array.isArray(p.notifications) ? p.notifications : [],
           profiles: Array.isArray(p.profiles) ? p.profiles.map(normalizeProfile) : [],
         };
       }
     }
   } catch (e) { /* ignore */ }
-  return defaults();
+  const initial = defaults();
+  initial.session = normalizeProfile(browserSession()) || initial.session;
+  return initial;
 }
 
 let state = loadState();
@@ -161,7 +177,13 @@ let draftPicked = false;
 let draftAddress = "";
 let addressRequest;
 
-function save() { try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch (e) { /* ignore */ } }
+function persist() {
+  const session = state.session.remember === false ? { logged: false, email: "", nombre: "" } : state.session;
+  localStorage.setItem(STORE_KEY, JSON.stringify({ ...state, session }));
+}
+
+function save() { try { persist(); } catch { /* storage may be full */ } }
+function ownSupports() { return Object.hasOwn(state.supported, state.session.email) ? state.supported[state.session.email] : []; }
 function getClaim(id) { return state.claims.find((c) => c.id === id); }
 
 /* ---------------- Helpers ---------------- */
@@ -202,8 +224,8 @@ function claimCard(c) {
     </a>`;
 }
 
-function mapLegend(categories = CATEGORIES) {
-  return Object.entries(categories).map(([k, c]) => `<span><i style="background:${c.color}"></i>${c.label}</span>`).join("");
+function mapLegend(categories) {
+  return Object.values(categories).map((category) => `<span>${icon(category.icon, 14)}${category.label}</span>`).join("");
 }
 
 /* ---------------- Mapa interactivo ---------------- */
@@ -501,7 +523,7 @@ function renderHome() {
     <section class="home-hero">
       <div class="container home-hero-grid">
         <div class="home-hero-text">
-          <span class="eyebrow">${icon("pin", 15)} Vicente López · Participación ciudadana</span>
+          <div class="home-municipal"><img src="assets/municipio-logo.svg" alt="Vicente López" width="168" height="48"><span>Plataforma municipal de participación ciudadana</span></div>
           <h1>¿Qué pasa en <span class="hl">tu barrio</span>?</h1>
           <p class="lead">Si hay una luminaria apagada, un bache o algo que dificulta el paso, marcá el lugar en el mapa. Podés seguir tu reclamo y apoyar el de otro vecino.</p>
           <div class="hero-actions">
@@ -543,11 +565,7 @@ function renderHome() {
     <section class="section" style="padding-top:0">
       <div class="container">
         <div class="section-head"><div><h2>Conocé Vicente López</h2><p>Un partido con costa, espacios verdes y una comunidad que participa.</p></div><a class="btn btn-ghost btn-sm" href="#/municipio">Ver el Municipio</a></div>
-        <div class="photo-band">
-          <a class="photo-card" href="#/municipio"><img src="assets/municipio-costa.jpg" alt="Paseo de la Costa de Vicente López" loading="lazy" /><span class="pc-cap">${icon("pin", 13)} Paseo de la Costa</span></a>
-          <a class="photo-card" href="#/municipio"><img src="assets/municipio-avenida.jpg" alt="Avenida del Libertador en Vicente López" loading="lazy" /><span class="pc-cap">${icon("pin", 13)} Avenida del Libertador</span></a>
-          <a class="photo-card" href="#/municipio"><img src="assets/municipio-edificio.jpg" alt="Edificio municipal de Vicente López" loading="lazy" /><span class="pc-cap">${icon("building", 13)} Palacio Municipal</span></a>
-        </div>
+        ${renderPlaceSlider()}
       </div>
     </section>
 
@@ -627,8 +645,7 @@ function claimRow(c, { thumbnail = false, status = false } = {}) {
   </article>`;
 }
 
-function claimPagination(claims, route, params) {
-  const perPage = 10;
+function claimPagination(claims, route, params, perPage = 10, compact = false) {
   const last = Math.max(1, Math.ceil(claims.length / perPage));
   const requested = Number(params.get("pagina"));
   const current = clamp(Number.isSafeInteger(requested) ? requested : 1, 1, last);
@@ -649,7 +666,7 @@ function claimPagination(claims, route, params) {
   const count = `Mostrando ${start + 1}–${start + page.length} de ${claims.length} ${claims.length === 1 ? "reclamo" : "reclamos"}`;
   const navigation = last > 1 ? `<nav class="claim-pagination" aria-label="Páginas de reclamos">
     ${current > 1 ? `<a class="page-link page-step" href="${url(current - 1)}" rel="prev">‹ Anterior</a>` : '<span class="page-link page-step" aria-disabled="true">‹ Anterior</span>'}
-    <div class="page-numbers">${numberedLinks}</div>
+    <div class="page-numbers">${compact ? `<span aria-current="page">${current} / ${last}</span>` : numberedLinks}</div>
     ${current < last ? `<a class="page-link page-step" href="${url(current + 1)}" rel="next">Siguiente ›</a>` : '<span class="page-link page-step" aria-disabled="true">Siguiente ›</span>'}
   </nav>` : "";
   return { page, count, navigation };
@@ -672,7 +689,7 @@ function renderReclamo(id) {
   if (!c) return `<section class="section"><div class="container"><div class="empty"><p style="font-weight:700;color:var(--ink)">Reclamo no encontrado</p><a class="btn btn-ghost" href="#/reclamos" style="margin-top:12px">Volver a reclamos</a></div></div></section>`;
 
   const cat = catMeta(c.categoria);
-  const supported = state.supported.includes(c.id);
+  const supported = ownSupports().includes(c.id);
   const pct = Math.min(100, Math.round((c.apoyos / THRESHOLD) * 100));
   const ready = c.apoyos >= THRESHOLD;
   const reference = referencePhoto(c);
@@ -716,13 +733,13 @@ function renderReclamo(id) {
               <div class="state-box"><div class="st-label">Estado reportado</div><div class="st-value">${icon("users", 17)} Reportado por vecinos</div><p>Publicado el ${fmtDate(c.fecha)} · ${c.apoyos} apoyos comunitarios.</p></div>
               <div class="state-box official"><div class="st-label">Estado actual · Municipio</div><div class="st-value">${statusBadge(c.estado)} ${c.verificado ? "Verificado" : ""}</div><p>${c.evidenciaFoto ? "Parte de intervención y registro visual disponibles." : c.evidencia ? esc(c.evidencia) : "El municipio todavía no informó una solución con evidencia."}</p></div>
             </div>
-            ${c.estado === "resuelto" && c.evidenciaFoto ? `<div class="resolution-evidence">
-              <div><span class="eyebrow">${icon("check", 14)} Intervención finalizada</span>
+            ${c.evidencia || c.evidenciaFoto || c.evidenciaMedia ? `<div class="resolution-evidence">
+              <div><span class="eyebrow">${c.estado === "resuelto" ? icon("check", 14) + " Intervención finalizada" : "Seguimiento municipal"}</span>
                 <h3>Evidencia municipal</h3>
                 ${c.fechaResolucion ? `<p class="muted">Resolución registrada el ${fmtDate(c.fechaResolucion)}.</p>` : ""}
-                <p>${esc(c.evidencia)}</p>
+                ${c.evidencia ? `<p>${esc(c.evidencia)}</p>` : ""}
               </div>
-              <figure><img src="${esc(c.evidenciaFoto)}" alt="Ilustración de la intervención" loading="lazy"><figcaption>Ilustración de la intervención</figcaption></figure>
+              ${evidenceMarkup(c)}
             </div>` : ""}
             <div class="divider"></div>
             <h3 style="margin:0 0 14px;font-size:1rem">Seguimiento</h3>
@@ -811,10 +828,14 @@ function renderEnviado(id) {
 }
 
 function socialOptions() {
+  const providers = [
+    ["Google", '<path fill="#4285f4" d="M21.6 12.2c0-.7-.1-1.4-.2-2.1H12v4h5.4a4.6 4.6 0 0 1-2 3v2.6h3.2c1.9-1.8 3-4.4 3-7.5Z"/><path fill="#34a853" d="M12 22c2.7 0 5-1 6.6-2.3l-3.2-2.6c-.9.6-2.1.9-3.4.9-2.6 0-4.8-1.8-5.6-4.1H3.1v2.6A10 10 0 0 0 12 22Z"/><path fill="#fbbc05" d="M6.4 13.9a6 6 0 0 1 0-3.8V7.5H3.1a10 10 0 0 0 0 9l3.3-2.6Z"/><path fill="#ea4335" d="M12 6c1.5 0 2.8.5 3.8 1.5l2.8-2.8A9.5 9.5 0 0 0 12 2a10 10 0 0 0-8.9 5.5l3.3 2.6A6 6 0 0 1 12 6Z"/>'],
+    ["Facebook", '<circle cx="12" cy="12" r="10" fill="#0866ff"/><path fill="#fff" d="M13.5 22v-7.8h2.6l.4-3h-3V9.4c0-.9.3-1.5 1.6-1.5h1.6V5.2a22 22 0 0 0-2.4-.1c-2.5 0-4.2 1.5-4.2 4.3v1.8H7.5v3h2.6v7.6c1.1.2 2.3.3 3.4.2Z"/>'],
+    ["Apple", '<path fill="#171717" d="M16.7 6.5c-1.5-.1-2.7.8-3.5.8-.8 0-2.1-.8-3.5-.8C7.3 6.5 5 8.4 5 11.9c0 3.4 2.4 7.9 4.4 7.9.9 0 1.8-.7 3.1-.7 1.4 0 2.1.7 3.2.7 1.7 0 3.5-3.1 4.1-5-3.2-1.3-3.4-5.1-.8-6.7-.7-1-1.6-1.5-2.3-1.6ZM15.3 5.3c.7-.9 1.1-1.9 1-3-.9 0-2.1.6-2.8 1.4-.6.7-1.2 1.8-1.1 2.9 1 .1 2.2-.5 2.9-1.3Z"/>'],
+  ];
   return `<div class="social-row" aria-label="Opciones de acceso">
-    <button type="button" class="social-btn" data-action="demo-social"><span class="g" aria-hidden="true">G</span> Continuar con Google</button>
-    <button type="button" class="social-btn" data-action="demo-social"><span class="facebook-mark" aria-hidden="true">f</span> Continuar con Facebook</button>
-    <button type="button" class="social-btn" data-action="demo-social">Continuar con Apple</button>
+    ${providers.map(([label, logo]) => `<button type="button" class="social-btn" data-action="demo-social">
+      <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true">${logo}</svg><span>Continuar con ${label}</span></button>`).join("")}
   </div>`;
 }
 
@@ -840,6 +861,7 @@ function renderRegistro() {
           <div class="field"><label for="rpass">Contraseña</label><input class="input" id="rpass" name="password" type="password" autocomplete="new-password" required minlength="6"></div>
           <div class="field"><label for="rpass2">Confirmar contraseña</label><input class="input" id="rpass2" name="password2" type="password" autocomplete="new-password" required minlength="6"></div>
         </div>
+        <label class="remember-login"><input type="checkbox" required> <span>Acepto los <a href="#/terminos">términos y condiciones</a>.</span></label>
         <div class="view-actions"><button class="btn btn-primary" type="submit">Crear cuenta</button></div>
       </form>
       <div class="register-social">${socialOptions()}</div>
@@ -854,6 +876,7 @@ function renderLogin() {
     <form data-form="login">
       <div class="field"><label for="lemail">Email</label><input class="input" id="lemail" name="email" type="email" autocomplete="email" required></div>
       <div class="field"><label for="lpass">Contraseña</label><input class="input" id="lpass" name="password" type="password" autocomplete="current-password" required></div>
+      <label class="remember-login"><input type="checkbox" name="remember"> Mantener sesión</label>
       <button class="btn btn-primary btn-block" type="submit">Ingresar</button>
     </form>
     <p class="auth-foot"><button type="button" class="btn btn-ghost btn-sm" data-action="forgot">¿Olvidaste tu contraseña?</button></p>
@@ -915,8 +938,12 @@ function renderNotificaciones() {
   const list = accountNotifications();
   const tipoIcon = { estado: "check", apoyo: "support", municipio: "building", sistema: "bell" };
   return `<section class="section"><div class="container">
-    <div class="section-head"><div><h2 class="notification-heading">${icon("bell", 30)} Notificaciones</h2><p>Novedades, estados actualizados y respuestas del municipio.</p></div>${list.some((n) => !n.leida) ? `<button class="btn btn-ghost btn-sm" data-action="mark-all">Marcar todas como leídas</button>` : ""}</div>
-    ${list.length ? `<div class="notif-list">${list.map((n) => `<a class="notif-item ${n.leida ? "" : "unread"}" data-id="${esc(n.id)}" href="${n.ref ? "#/reclamo/" + esc(n.ref) : "#/"}"><span class="nic">${icon(tipoIcon[n.tipo] || "bell", 21)}</span><span class="notification-body"><span class="nt">${esc(n.titulo)}</span><span class="nd">${esc(n.texto)}</span></span><span class="nh">${fmtDate(n.fecha)}</span>${n.leida ? "" : '<span class="new-dot" aria-label="Sin leer"></span>'}</a>`).join("")}</div>` : `<div class="empty"><p>No tenés notificaciones.</p><p>Cuando haya novedades, van a aparecer acá.</p></div>`}
+    <div class="section-head"><div><h1 class="notification-heading" id="notification-title" tabindex="-1">${icon("bell", 30)} Notificaciones</h1><p>Novedades, estados actualizados y respuestas del municipio.</p></div>
+      ${list.length ? `<div class="view-actions">${list.some((n) => !n.leida) ? '<button class="btn btn-ghost btn-sm" data-action="mark-all">Marcar todas como leídas</button>' : ""}<button class="btn btn-ghost btn-sm" data-action="delete-all-notifications">Eliminar todas</button></div>` : ""}</div>
+    ${list.length ? `<ul class="notif-list">${list.map((n) => `<li class="notif-entry">
+      <a class="notif-item ${n.leida ? "" : "unread"}" data-id="${esc(n.id)}" href="${n.ref ? "#/reclamo/" + esc(n.ref) : "#/"}"><span class="nic">${icon(tipoIcon[n.tipo] || "bell", 21)}</span><span class="notification-body"><span class="nt">${esc(n.titulo)}</span><span class="nd">${esc(n.texto)}</span></span><span class="nh">${fmtDate(n.fecha)}</span>${n.leida ? "" : '<span class="new-dot" aria-label="Sin leer"></span>'}</a>
+      <button class="icon-btn" type="button" data-action="delete-notification" data-id="${esc(n.id)}" aria-label="Eliminar aviso: ${esc(n.titulo)}" data-tooltip="Eliminar aviso">${icon("limpieza", 18)}</button>
+    </li>`).join("")}</ul>` : '<div class="empty"><p>No tenés notificaciones.</p><p>Cuando haya novedades, van a aparecer acá.</p></div>'}
   </div></section>`;
 }
 
@@ -939,6 +966,7 @@ function renderMunicipio() {
       </div>
     </div>
     <p class="photo-credit">Fotos del partido de Vicente López · Wikimedia Commons</p>
+    ${renderMunicipalImpact()}
   </div></section>`;
 }
 
@@ -973,7 +1001,11 @@ function municipalEditor(c) {
       <div class="municipal-form-section">
         <h4>Evidencia y respuesta</h4>
         <div class="field"><label for="evidencia">Evidencia de la solución</label><span id="evidencia-hint" class="hint">Para cerrar el reclamo, registrá qué se hizo y cómo se comprobó la solución.</span><textarea class="textarea" id="evidencia" name="evidencia" aria-describedby="evidencia-hint" rows="3" placeholder="Ej.: Se destapó la rejilla y se comprobó el escurrimiento.">${esc(c.evidencia || "")}</textarea></div>
-        ${c.evidenciaFoto ? `<details class="municipal-latest"><summary>Ver evidencia adjunta</summary><img src="${esc(c.evidenciaFoto)}" alt="Evidencia de resolución"></details>` : ""}
+        <div class="field"><label for="evidence-file">Imagen o video <span class="hint">· Hasta 15 MB</span></label>
+          <input class="input" id="evidence-file" type="file" accept="image/png,image/jpeg,image/webp,image/gif,video/mp4,video/webm,video/quicktime">
+          <p class="hint">Si adjuntás un archivo nuevo, reemplaza al anterior.</p></div>
+        ${c.evidenciaFoto || c.evidenciaMedia ? `<details class="municipal-latest"><summary>Ver evidencia adjunta</summary>${evidenceMarkup(c)}</details>
+          <label class="municipal-verify"><input type="checkbox" name="removeEvidence"> Quitar archivo adjunto</label>` : ""}
         <div class="field"><label for="respuesta">Respuesta pública <span class="hint">· Opcional</span></label><textarea class="textarea" id="respuesta" name="respuesta" rows="3" placeholder="Contale al vecino qué pasó o cuál es el próximo paso."></textarea></div>
         ${latest ? `<details class="municipal-latest"><summary>Última respuesta · ${fmtDate(latest.fecha)}</summary><p>${esc(latest.texto)}</p></details>` : ""}
       </div>
@@ -1026,31 +1058,81 @@ function renderMunicipal() {
   </div></section>`;
 }
 
+function mapFilter(params) {
+  return {
+    category: params.get("cat") || "todos",
+    status: params.get("estado") || "todos",
+  };
+}
+
+function mapMatches({ category, status }) {
+  return state.claims.filter((claim) => (category === "todos" || claim.categoria === category)
+    && (status === "todos" || claim.estado === status));
+}
+
+function renderMapResults(list, params) {
+  const page = claimPagination(list, "mapa", params, 5, true);
+  return `<p class="map-result-count" aria-live="polite">${list.length ? page.count : "Sin reclamos para estos filtros"}</p>
+    <div class="map-result-list">${page.page.map((claim) => {
+      const category = catMeta(claim.categoria);
+      return `<a class="map-mini" href="#/reclamo/${esc(claim.id)}" style="--c:${category.color}">
+        <span class="ic">${icon(category.icon, 20)}</span><span><span class="t">${esc(claim.titulo)}</span>
+        <span class="s">${esc(claim.barrio)} · ${ESTADOS[claim.estado]} · ${claim.apoyos} apoyos</span></span></a>`;
+    }).join("")}</div>${page.navigation}`;
+}
+
 function renderMapa() {
   const { params } = getRoute();
-  const cat = params.get("cat") || "todos";
-  const estado = params.get("estado") || "todos";
-  const list = state.claims.filter((c) => (cat === "todos" || c.categoria === cat) && (estado === "todos" || c.estado === estado));
-  const categoryURL = (key) => {
-    const query = new URLSearchParams(params);
-    if (key === "todos") query.delete("cat");
-    else query.set("cat", key);
-    return "#/mapa" + (query.size ? "?" + query.toString() : "");
-  };
-  const chips = [["todos", "Todos", "#0f766e"]].concat(Object.entries(REPORT_CATEGORIES).map(([k, c]) => [k, c.label, c.color]))
-    .map(([k, label, color]) => `<a class="chipbtn ${cat === k ? "is-active" : ""}" style="--c:${color}" href="${categoryURL(k)}"><span class="sw"></span>${label}</a>`).join("");
+  const filter = mapFilter(params);
+  const list = mapMatches(filter);
+  const categories = [["todos", "Todos", "pin"], ...Object.entries(REPORT_CATEGORIES).map(([key, item]) => [key, item.label, item.icon])];
   return `<section class="section"><div class="container">
-    <div class="section-head"><div><span class="eyebrow">${icon("pin", 15)} Mapa</span><h2 style="margin-top:12px">Mapa de reclamos · Vicente López</h2><p>${list.length} ${list.length === 1 ? "reclamo ubicado" : "reclamos ubicados"}. Acercate para separar las tarjetas y abrí un reclamo para ver el detalle.</p></div>
-      <label class="stats-period">Estado <select class="input" id="mapStatus"><option value="todos">Todos los estados</option>${Object.entries(ESTADOS).map(([key, label]) => `<option value="${key}" ${key === estado ? "selected" : ""}>${label}</option>`).join("")}</select></label>
+    <div class="section-head"><div><span class="eyebrow">${icon("pin", 15)} Mapa</span><h2 style="margin-top:12px">Mapa de reclamos · Vicente López</h2>
+      <p>Acercate para separar las tarjetas y abrí un reclamo para ver el detalle.</p></div>
+      <label class="stats-period">Estado <select class="input" id="mapStatus"><option value="todos">Todos los estados</option>${Object.entries(ESTADOS).map(([key, label]) => `<option value="${key}" ${key === filter.status ? "selected" : ""}>${label}</option>`).join("")}</select></label>
     </div>
-    <div class="chipbar" style="margin-bottom:16px">${chips}</div>
+    <div class="chipbar map-filters" role="group" aria-label="Categorías del mapa">${categories.map(([key, label, symbol]) =>
+      `<button type="button" class="chipbtn" data-map-category="${key}" aria-pressed="${key === filter.category}" style="--c:${CATEGORY_COLOR}">${icon(symbol, 15)}${label}</button>`).join("")}</div>
     <div class="map-wrap">
       <div class="map-card">${reportMap(list, { cls: "explore-map" })}<div class="map-legend">${mapLegend(REPORT_CATEGORIES)}</div>
-        ${list.length === 0 ? `<div class="map-empty"><div class="me-card"><span class="me-ic">${icon("pin", 24)}</span><strong>No hay reclamos en esta selección</strong><p>Probá cambiar la categoría o el estado.</p></div></div>` : ""}
+        <div class="map-empty" id="map-empty" ${list.length ? "hidden" : ""}><div class="me-card"><span class="me-ic">${icon("pin", 24)}</span><strong>No hay reclamos en esta selección</strong><p>Probá cambiar la categoría o el estado.</p></div></div>
       </div>
-      <div class="map-side">${list.length ? list.map((c) => { const cm = catMeta(c.categoria); return `<a class="map-mini" href="#/reclamo/${c.id}" style="--c:${cm.color}"><span class="ic">${icon(cm.icon, 20)}</span><span><span class="t">${esc(c.titulo)}</span><span class="s">${esc(c.barrio)} · ${ESTADOS[c.estado]} · ${c.apoyos} apoyos</span></span></a>`; }).join("") : `<div class="empty" style="padding:34px 18px">Sin reclamos todavía.</div>`}</div>
+      <aside class="map-side" id="map-results" aria-label="Resultados del mapa" tabindex="-1">${renderMapResults(list, params)}</aside>
     </div>
   </div></section>`;
+}
+
+function setMapFilter(key, value) {
+  const { params } = getRoute();
+  if (value === "todos") params.delete(key);
+  else params.set(key, value);
+  params.delete("pagina");
+  location.hash = "#/mapa" + (params.size ? "?" + params : "");
+}
+
+function updateMapView(previous, current) {
+  const filter = mapFilter(current);
+  const before = mapFilter(previous);
+  const list = mapMatches(filter);
+  if (before.category !== filter.category || before.status !== filter.status) {
+    liveMaps[0].setClaims(list);
+    document.getElementById("mapStatus").value = filter.status;
+    document.getElementById("map-empty").hidden = list.length > 0;
+    document.querySelectorAll("[data-map-category]").forEach((button) => {
+      button.setAttribute("aria-pressed", String(button.dataset.mapCategory === filter.category));
+    });
+  }
+  const results = document.getElementById("map-results");
+  const pager = document.activeElement?.closest(".claim-pagination");
+  const relation = pager && document.activeElement.rel;
+  results.innerHTML = renderMapResults(list, current);
+  if (pager && results.contains(document.activeElement) === false) {
+    const next = relation && results.querySelector(`[rel="${relation}"]`);
+    (next || results).focus({ preventScroll: true });
+  }
+  if (!matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    results.querySelector(".map-result-list").animate([{ opacity: .3, transform: "translateY(5px)" }, { opacity: 1, transform: "none" }], { duration: 210, easing: "ease-out" });
+  }
 }
 
 const CHART_LEAD_MS = 240;
@@ -1166,9 +1248,6 @@ function renderEstadisticas() {
         <label class="stats-period">Barrio <select class="input" id="statsBarrio"><option value="">Todos los barrios</option>${Object.keys(BARRIOS).map((label) => `<option ${label === barrio ? "selected" : ""}>${esc(label)}</option>`).join("")}</select></label>
       </div>
     </div>
-    <div class="dashboard-tools">
-      <button type="button" class="btn btn-ghost btn-sm" data-action="replay-charts"><span aria-hidden="true">↻</span> Repetir animación</button>
-    </div>
     <div class="kpi-grid report-kpis">
       <div class="kpi"><div class="l">Reclamos recibidos</div><div class="n">${claims.length}</div></div>
       <div class="kpi"><div class="l">Resueltos</div><div class="n">${resueltos} <small>${porcentaje}% del total</small></div></div>
@@ -1218,33 +1297,36 @@ Vecinos de ${c.barrio} · AvisAR Vicente López`;
 }
 
 function renderPeticiones() {
-  if (!state.claims.length) {
-    return `<section class="section"><div class="container"><div class="section-head"><div><span class="eyebrow">${icon("users", 15)} Peticiones colectivas</span><h2 style="margin-top:12px">De reclamo vecinal a carta pública</h2><p>Cuando un reclamo reúne ${THRESHOLD} apoyos, se habilita una petición dirigida a las autoridades.</p></div></div><div class="empty"><p style="font-weight:700;color:var(--ink);margin:0 0 6px">Todavía no hay peticiones</p><p style="margin:0 0 14px">Se habilitan cuando un reclamo alcanza ${THRESHOLD} apoyos.</p><a class="btn btn-primary" href="#/crear">${icon("plus", 16)} Crear reclamo</a></div></div></section>`;
-  }
+  const { params } = getRoute();
+  const pending = params.get("grupo") === "en-camino";
   const ordered = [...state.claims].sort((a, b) => b.apoyos - a.apoyos);
-  const ready = ordered.filter((c) => c.apoyos >= THRESHOLD);
-  const pending = ordered.filter((c) => c.apoyos < THRESHOLD);
+  const readyCount = ordered.filter((claim) => claim.apoyos >= THRESHOLD).length;
+  const list = ordered.filter((claim) => (claim.apoyos < THRESHOLD) === pending);
+  const { page, navigation } = claimPagination(list, "peticiones", params, 8);
   return `<section class="section"><div class="container">
-    <div class="section-head"><div><span class="eyebrow">${icon("users", 15)} Peticiones colectivas</span><h2 style="margin-top:12px">De reclamo vecinal a carta pública</h2><p>Cuando un reclamo reúne ${THRESHOLD} apoyos válidos, se habilita una petición dirigida a las autoridades municipales.</p></div></div>
-    ${ready.length ? `<div class="form-note" style="background:var(--primary-soft);border-color:#bfe3dd;color:#115e59">${icon("doc", 18)} <span><strong>${ready.length} ${ready.length === 1 ? "petición habilitada" : "peticiones habilitadas"}</strong> en Vicente López.</span></div>` : ""}
-    <h3 style="margin:22px 0 14px;font-size:1.05rem">Peticiones habilitadas</h3>
-    ${ready.length ? ready.map((c) => { const cm = catMeta(c.categoria); return `<div class="petition-card ready"><div><div style="display:flex;gap:8px;flex-wrap:wrap">${catChip(c.categoria)}${statusBadge(c.estado)}</div><h3>${esc(c.titulo)}</h3><p class="muted" style="margin:0 0 10px;font-size:.86rem">${esc(c.barrio)} · ${esc(c.direccion)}</p><div class="pbar" style="--c:${cm.color}"><div class="progress"><i style="width:100%"></i></div><div class="pmeta"><span>${c.apoyos} apoyos</span><span>Meta: ${THRESHOLD}</span></div></div></div><div class="petition-actions"><button class="btn btn-primary btn-sm" data-action="letter" data-id="${c.id}">${icon("doc", 16)} Ver carta</button><a class="btn btn-ghost btn-sm" href="#/reclamo/${c.id}">Ver reclamo</a></div></div>`; }).join("") : `<div class="empty">Ningún reclamo alcanzó los ${THRESHOLD} apoyos todavía.</div>`}
-    <h3 style="margin:30px 0 14px;font-size:1.05rem">En camino a la meta</h3>
-    ${pending.length ? pending.map((c) => { const cm = catMeta(c.categoria); const pct = Math.round((c.apoyos / THRESHOLD) * 100); return `<div class="petition-card"><div><div style="display:flex;gap:8px;flex-wrap:wrap">${catChip(c.categoria)}</div><h3>${esc(c.titulo)}</h3><p class="muted" style="margin:0 0 10px;font-size:.86rem">${esc(c.barrio)}</p><div class="pbar" style="--c:${cm.color}"><div class="progress"><i style="width:${pct}%"></i></div><div class="pmeta"><span>${c.apoyos} apoyos</span><span>Faltan ${THRESHOLD - c.apoyos}</span></div></div></div><div class="petition-actions"><a class="btn btn-ghost btn-sm" href="#/reclamo/${c.id}">${icon("support", 16)} Apoyar</a></div></div>`; }).join("") : `<div class="empty">No hay reclamos en camino a la meta.</div>`}
+    <div class="section-head"><div><span class="eyebrow">${icon("users", 15)} Participación ciudadana</span><h1>Peticiones colectivas</h1>
+      <p>Con ${THRESHOLD} apoyos, un reclamo habilita una carta pública dirigida al Municipio.</p></div></div>
+    <nav class="chipbar petition-tabs" aria-label="Grupos de peticiones">
+      <a class="btn ${pending ? "btn-ghost" : "btn-primary"}" href="#/peticiones" ${pending ? "" : 'aria-current="page"'}>Habilitadas · ${readyCount}</a>
+      <a class="btn ${pending ? "btn-primary" : "btn-ghost"}" href="#/peticiones?grupo=en-camino" ${pending ? 'aria-current="page"' : ""}>En camino · ${ordered.length - readyCount}</a>
+    </nav>
+    <div id="claim-results" tabindex="-1"><h2>${pending ? "En camino a la meta" : "Peticiones habilitadas"}</h2>
+      ${page.length ? page.map((claim) => {
+        const pct = Math.min(100, Math.round(claim.apoyos / THRESHOLD * 100));
+        return `<article class="petition-card ${pending ? "" : "ready"}"><div>
+          <div class="petition-badges">${catChip(claim.categoria)}${statusBadge(claim.estado)}</div>
+          <h3>${esc(claim.titulo)}</h3><p class="muted">${esc(claim.barrio)} · ${esc(claim.direccion)}</p>
+          <div class="pbar" style="--c:${CATEGORY_COLOR}"><div class="progress"><i style="width:${pct}%"></i></div>
+          <div class="pmeta"><span>${claim.apoyos} apoyos</span><span>${pending ? "Faltan " + (THRESHOLD - claim.apoyos) : "Meta alcanzada"}</span></div></div></div>
+          <div class="petition-actions">${pending ? "" : `<button class="btn btn-primary btn-sm" data-action="letter" data-id="${esc(claim.id)}">${icon("doc", 16)} Ver carta</button>`}
+          <a class="btn btn-ghost btn-sm" href="#/reclamo/${esc(claim.id)}">${pending ? "Ver y apoyar" : "Ver reclamo"}</a></div></article>`;
+      }).join("") : '<div class="empty">Todavía no hay iniciativas en esta sección.</div>'}
+      ${navigation}
+    </div>
   </div></section>`;
 }
 
 /* ---------------- Router ---------------- */
-function renderAyuda(terminos) {
-  const title = terminos ? "Términos y condiciones" : "Preguntas frecuentes";
-  const body = terminos
-    ? `<p>AvisAR permite registrar y seguir reclamos vecinales. Los datos se guardan en este navegador.</p><p>Describí el problema con información pertinente y evitá adjuntar datos personales de terceros.</p>`
-    : `<details><summary>¿Cómo publico un reclamo?</summary><p>Ingresá a tu cuenta, elegí una categoría, describí el problema y marcá su ubicación en el mapa.</p></details>
-       <details><summary>¿Dónde consulto el estado?</summary><p>Entrá a <a href="#/mis-reclamos">Mis reclamos</a> y abrí el detalle para ver el estado y las novedades.</p></details>
-       <details><summary>¿Cómo apoyo un reclamo?</summary><p>Abrí su detalle e iniciá sesión para apoyarlo o comentar.</p></details>`;
-  return `<section class="section"><div class="container"><div class="panel panel-pad help-panel"><h1>${title}</h1>${body}</div></div></section>`;
-}
-
 function getRoute() {
   const raw = location.hash.slice(1) || "/";
   const [path, qs] = raw.split("?");
@@ -1268,25 +1350,24 @@ function observePendingCharts() {
   });
 }
 
+const civicObserver = new IntersectionObserver((entries, observer) => {
+  for (const entry of entries) {
+    if (!entry.isIntersecting) continue;
+    entry.target.classList.add("is-revealed");
+    observer.unobserve(entry.target);
+  }
+}, { threshold: .12 });
+
 function playViewEffects() {
   observePendingCharts();
+  document.querySelectorAll("[data-reveal]:not(.is-revealed)").forEach((item) => civicObserver.observe(item));
   document.querySelector("#app .is-success-pending")?.classList.replace("is-success-pending", "is-success-playing");
-}
-
-function replayCharts() {
-  const charts = document.getElementById("stats-charts");
-  chartObserver.disconnect();
-  charts.querySelectorAll(".is-chart-visible").forEach((chart) => {
-    chart.classList.replace("is-chart-visible", "chart-pending");
-  });
-  charts.querySelector("h3").focus({ preventScroll: true });
-  charts.scrollIntoView({ block: "start" });
-  observePendingCharts();
 }
 
 function render({ deferMotion = false, fallbackTransition = false } = {}) {
   cancelAddressSearch();
   chartObserver.disconnect();
+  civicObserver.disconnect();
   liveMaps.splice(0).forEach((map) => map.destroy());
   mapConfigs.length = 0;
   const { parts } = getRoute();
@@ -1296,6 +1377,8 @@ function render({ deferMotion = false, fallbackTransition = false } = {}) {
     case "home": html = renderHome(); break;
     case "reclamos": html = renderReclamos(); break;
     case "ver-reclamos": html = renderVerReclamos(); break;
+    case "contacto": html = renderContacto(); break;
+    case "novedades": html = renderNovedades(); break;
     case "preguntas": html = renderAyuda(false); break;
     case "terminos": html = renderAyuda(true); break;
     case "reclamo": html = renderReclamo(parts[1]); break;
@@ -1318,7 +1401,11 @@ function render({ deferMotion = false, fallbackTransition = false } = {}) {
   app.classList.toggle("view-arriving", fallbackTransition);
   app.dataset.path = location.hash.split("?")[0] || "#/";
   hideChartTooltip();
+  hideButtonTooltip();
+  releaseEvidenceURLs();
   app.innerHTML = html;
+  loadEvidenceFiles(app);
+  if (view === "novedades") updateMunicipalNews(app);
   const queue = app.querySelector(".municipal-list");
   const selected = queue?.querySelector("a[aria-current]");
   if (selected) {
@@ -1357,18 +1444,22 @@ function accountNotifications() {
 }
 
 function saveProfile() {
-  const { logged, ...profile } = state.session;
+  const { logged, remember, ...profile } = state.session;
+  try {
+    if (remember === false) sessionStorage.setItem(SESSION_KEY, JSON.stringify(state.session));
+    else sessionStorage.removeItem(SESSION_KEY);
+  } catch { /* storage may be unavailable */ }
   state.profiles = state.profiles.filter((p) => p.email !== profile.email);
   state.profiles.push(profile);
   save();
 }
 
-function loginDemo(email, nombre, details = {}) {
+function loginDemo(email, nombre, details = {}, remember = true) {
   const knownEmail = state.profiles.find((p) => p.email.toLowerCase() === email.toLowerCase())?.email
     || state.claims.find((c) => c.owner?.toLowerCase() === email.toLowerCase())?.owner;
   email = knownEmail || email.toLowerCase();
   state.session = { logged: true, email, nombre: nombre || email.split("@")[0].replace(/[._-]/g, " ").replace(/\b\w/g, (m) => m.toUpperCase()) };
-  Object.assign(state.session, state.profiles.find((p) => p.email === email), details);
+  Object.assign(state.session, state.profiles.find((p) => p.email === email), details, { remember });
   saveProfile();
   const { params } = getRoute();
   const next = params.get("next");
@@ -1377,12 +1468,46 @@ function loginDemo(email, nombre, details = {}) {
 }
 
 const mobileSidenav = matchMedia("(max-width:900px)");
+let sidenavTouch;
+
+document.addEventListener("touchstart", (event) => {
+  sidenavTouch = null;
+  if (!mobileSidenav.matches || event.touches.length !== 1) return;
+  const open = document.body.classList.contains("sidenav-open");
+  const { clientX, clientY } = event.touches[0];
+  if (open ? !event.target.closest("#sidenav") : !event.target.closest(".sidenav-swipe")) return;
+  sidenavTouch = { x: clientX, y: clientY, open };
+}, { passive: true });
+
+document.addEventListener("touchend", (event) => {
+  if (!sidenavTouch) return;
+  const { x, y, open } = sidenavTouch;
+  sidenavTouch = null;
+  const { clientX, clientY } = event.changedTouches[0];
+  const delta = (clientX - x) * (open ? -1 : 1);
+  if (delta >= 55 && delta > Math.abs(clientY - y) * 1.5) {
+    if (event.cancelable) event.preventDefault();
+    setSidenav(!open);
+  }
+}, { passive: false });
+document.addEventListener("touchcancel", () => { sidenavTouch = null; }, { passive: true });
+
+const menuButton = document.getElementById("menuToggle");
+menuButton.addEventListener("touchend", (event) => {
+  if (!mobileSidenav.matches || !event.cancelable || event.changedTouches.length !== 1) return;
+  const { clientX, clientY } = event.changedTouches[0];
+  const { left, right, top, bottom } = menuButton.getBoundingClientRect();
+  if (clientX < left || clientX > right || clientY < top || clientY > bottom) return;
+  event.preventDefault();
+  toggleSidenav();
+}, { passive: false });
 
 function setSidenav(open) {
   const activeClass = mobileSidenav.matches ? "sidenav-open" : "sidenav-pinned";
   document.body.classList.toggle(activeClass, open);
-  document.getElementById("menuToggle").setAttribute("aria-expanded", String(open));
+  menuButton.setAttribute("aria-expanded", String(open));
   document.getElementById("sidenav").inert = mobileSidenav.matches && !open;
+  document.querySelector(".content").inert = mobileSidenav.matches && open;
 }
 
 function toggleSidenav() {
@@ -1398,9 +1523,9 @@ function resetSidenav() {
 function supportClaim(id) {
   if (!requireLogin(location.hash)) return;
   const c = getClaim(id);
-  if (!c || state.supported.includes(id)) return;
+  if (!c || ownSupports().includes(id)) return;
   c.apoyos++;
-  state.supported.push(id);
+  state.supported[state.session.email] = [...ownSupports(), id];
   state.notifications.unshift({ id: "n" + Date.now(), tipo: "apoyo", recipient: state.session.email, titulo: "Apoyo registrado", texto: `Apoyaste "${c.titulo}".`, fecha: new Date().toISOString().slice(0, 10), leida: false, ref: c.id });
   save(); render(); toast("¡Gracias! Tu apoyo quedó registrado.");
 }
@@ -1487,6 +1612,58 @@ document.addEventListener("keydown", (event) => {
   if (event.key === "Escape") hideChartTooltip();
 });
 
+const buttonTooltip = document.getElementById("button-tooltip");
+const tooltipControls = "button, .btn, .icon-btn, .chipbtn, .page-link[href], .snav-item, .user-chip";
+let tooltipControl;
+let tooltipTimer;
+
+function hideButtonTooltip() {
+  clearTimeout(tooltipTimer);
+  tooltipControl = null;
+  buttonTooltip.hidden = true;
+}
+
+function scheduleButtonTooltip(control) {
+  if (!control || control === tooltipControl || control.disabled) return;
+  hideButtonTooltip();
+  const nativeTitle = control.getAttribute("title");
+  if (nativeTitle) {
+    control.dataset.tooltip ||= nativeTitle;
+    control.removeAttribute("title");
+  }
+  const label = control.dataset.tooltip || control.getAttribute("aria-label") || control.textContent.trim().replace(/\s+/g, " ");
+  if (!label) return;
+  tooltipControl = control;
+  tooltipTimer = setTimeout(() => {
+    if (!control.isConnected) return;
+    const rect = control.getBoundingClientRect();
+    buttonTooltip.textContent = label;
+    buttonTooltip.hidden = false;
+    const { offsetWidth: width, offsetHeight: height } = buttonTooltip;
+    buttonTooltip.style.left = clamp(rect.left + (rect.width - width) / 2, 8, innerWidth - width - 8) + "px";
+    buttonTooltip.style.top = (rect.top - height - 9 >= 8 ? rect.top - height - 9 : rect.bottom + 9) + "px";
+  }, 430);
+}
+
+document.addEventListener("pointerover", (event) => {
+  if (event.pointerType === "mouse" || event.pointerType === "pen") scheduleButtonTooltip(event.target.closest(tooltipControls));
+});
+document.addEventListener("pointerout", (event) => {
+  if (tooltipControl?.contains(event.target) && !tooltipControl.contains(event.relatedTarget)) hideButtonTooltip();
+});
+document.addEventListener("focusin", (event) => {
+  if (event.target.matches(":focus-visible")) scheduleButtonTooltip(event.target.closest(tooltipControls));
+});
+document.addEventListener("focusout", (event) => {
+  if (event.target === tooltipControl) hideButtonTooltip();
+});
+document.addEventListener("pointerdown", hideButtonTooltip, { passive: true });
+document.addEventListener("scroll", hideButtonTooltip, { capture: true, passive: true });
+window.addEventListener("resize", hideButtonTooltip);
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") hideButtonTooltip();
+});
+
 function toggleChartSeries(button) {
   const chart = button.closest(".chart-panel");
   const active = button.getAttribute("aria-pressed") === "true";
@@ -1512,8 +1689,20 @@ function highlightChartStatus(button) {
 /* ---------------- Eventos: click ---------------- */
 document.addEventListener("click", (e) => {
   const t = e.target;
+  const place = t.closest("[data-place]");
+  if (place) {
+    const slider = place.closest(".place-slider");
+    const slides = [...slider.querySelectorAll(".place-slide")];
+    const current = slides.findIndex((slide) => !slide.hidden);
+    const next = (current + Number(place.dataset.place) + slides.length) % slides.length;
+    slides[current].hidden = true;
+    slides[next].hidden = false;
+    slider.querySelector(".place-position").textContent = `${next + 1} de ${slides.length}`;
+    return;
+  }
+  const mapCategory = t.closest("[data-map-category]");
+  if (mapCategory) { setMapFilter("cat", mapCategory.dataset.mapCategory); return; }
   if (t.closest('[data-action="find-address"]')) { findDraftAddress(); return; }
-  if (t.closest('[data-action="replay-charts"]')) { replayCharts(); return; }
   const seriesToggle = t.closest("[data-series-toggle]");
   if (seriesToggle) { toggleChartSeries(seriesToggle); return; }
   const statusToggle = t.closest("[data-status-toggle]");
@@ -1529,10 +1718,29 @@ document.addEventListener("click", (e) => {
   const copyBtn = t.closest('[data-action="copy-letter"]');
   if (copyBtn) { const c = getClaim(copyBtn.dataset.id); if (c) copyText(letterText(c)); return; }
   if (t.closest('[data-action="close-modal"]')) { closeModal(t); return; }
-  if (t.closest('[data-action="demo-social"]')) { loginDemo("vecino.demo@avisar.gob.ar", "Vecino"); return; }
-  if (t.closest('[data-action="logout"]')) { state.session = { logged: false, email: "", nombre: "" }; save(); render(); toast("Cerraste sesión."); return; }
+  if (t.closest('[data-action="demo-social"]')) {
+    const remember = document.querySelector('[name="remember"]');
+    loginDemo("vecino.demo@avisar.gob.ar", "Vecino", {}, remember?.checked ?? true);
+    return;
+  }
+  if (t.closest('[data-action="logout"]')) {
+    try { sessionStorage.removeItem(SESSION_KEY); } catch { /* storage may be unavailable */ }
+    state.session = { logged: false, email: "", nombre: "" }; save(); render(); toast("Cerraste sesión."); return; }
   if (t.closest('[data-action="forgot"]')) { toast("La recuperación por correo no está habilitada."); return; }
   if (t.closest('[data-action="mark-all"]')) { accountNotifications().forEach((n) => (n.leida = true)); save(); render(); toast("Notificaciones marcadas como leídas."); return; }
+
+  const deleteNotice = t.closest('[data-action="delete-notification"], [data-action="delete-all-notifications"]');
+  if (deleteNotice) {
+    const notices = accountNotifications();
+    const id = deleteNotice.dataset.id;
+    const removing = notices.filter((notice) => !id || notice.id === id);
+    state.notifications = state.notifications.filter((notice) => !removing.includes(notice));
+    save();
+    render();
+    document.getElementById("notification-title").focus({ preventScroll: true });
+    toast(id ? "Notificación eliminada." : "Bandeja vaciada.");
+    return;
+  }
 
   const notif = t.closest(".notif-item");
   if (notif) { const n = state.notifications.find((x) => x.id === notif.dataset.id); if (n && !n.leida) { n.leida = true; save(); } }
@@ -1550,12 +1758,7 @@ document.addEventListener("input", (event) => {
 
 /* ---------------- Eventos: change ---------------- */
 document.addEventListener("change", (e) => {
-  if (e.target.id === "mapStatus") {
-    const { params } = getRoute();
-    if (e.target.value === "todos") params.delete("estado");
-    else params.set("estado", e.target.value);
-    location.hash = "#/mapa" + (params.size ? "?" + params.toString() : "");
-  }
+  if (e.target.id === "mapStatus") setMapFilter("estado", e.target.value);
   if (e.target.id === "statsPeriod" || e.target.id === "statsBarrio") {
     const { params } = getRoute();
     const key = e.target.id === "statsPeriod" ? "periodo" : "barrio";
@@ -1574,7 +1777,7 @@ document.addEventListener("change", (e) => {
 });
 
 /* ---------------- Eventos: submit ---------------- */
-document.addEventListener("submit", (e) => {
+document.addEventListener("submit", async (e) => {
   const form = e.target;
   const kind = form.dataset.form;
   if (!kind) return;
@@ -1645,7 +1848,7 @@ document.addEventListener("submit", (e) => {
       state.claims.unshift(claim);
       state.notifications.unshift({ id: "n" + Date.now(), tipo: "sistema", titulo: "Reclamo enviado", texto: `Tu reclamo #${claim.numero} fue publicado en el mapa.`, fecha: claim.fecha, leida: false, ref: id });
       try {
-        localStorage.setItem(STORE_KEY, JSON.stringify(state));
+        persist();
       } catch {
         state.claims.shift();
         state.notifications.shift();
@@ -1686,6 +1889,10 @@ document.addEventListener("submit", (e) => {
         || state.claims.some((c) => c.owner?.toLowerCase() === email && c.owner !== previousEmail);
       if (emailInUse) { toast("Ya existe una cuenta con ese correo."); return; }
       state.profiles = state.profiles.filter((p) => p.email !== previousEmail);
+      if (Object.hasOwn(state.supported, previousEmail)) {
+        state.supported[email] = state.supported[previousEmail];
+        delete state.supported[previousEmail];
+      }
       state.claims.forEach((c) => { if (c.owner === previousEmail) c.owner = email; });
       state.notifications.forEach((n) => { if (n.recipient === previousEmail) n.recipient = email; });
     }
@@ -1704,7 +1911,7 @@ document.addEventListener("submit", (e) => {
     const email = String(data.get("email") || "").trim();
     const pass = String(data.get("password") || "");
     if (!email || pass.length < 4) { toast("Revisá el email y la contraseña."); return; }
-    loginDemo(email); return;
+    loginDemo(email, undefined, {}, data.has("remember")); return;
   }
 
   if (kind === "municipal-search") {
@@ -1714,24 +1921,60 @@ document.addEventListener("submit", (e) => {
 
   if (kind === "municipal") {
     const c = getClaim(form.dataset.id); if (!c) return;
+    const submit = form.querySelector('button[type="submit"]');
+    if (submit.disabled) return;
     const data = new FormData(form);
     const nuevoEstado = data.get("estado");
     const verificado = data.get("verificado") === "on";
     const evidencia = String(data.get("evidencia") || "").trim();
     const respuesta = String(data.get("respuesta") || "").trim();
-    if (nuevoEstado === "resuelto" && !evidencia) {
-      form.elements.evidencia.focus();
-      toast("Para marcar como resuelto necesitás cargar evidencia.");
+    const file = form.querySelector("#evidence-file").files[0];
+    const remove = data.has("removeEvidence");
+    if (file && (file.size > EVIDENCE_LIMIT || !/^(image\/(png|jpeg|webp|gif)|video\/(mp4|webm|quicktime))$/.test(file.type))) {
+      toast("Elegí una imagen PNG, JPEG, WebP o GIF, o un video MP4, WebM o MOV de hasta 15 MB.");
       return;
     }
-    const previousState = c.estado;
-    if (nuevoEstado !== previousState || evidencia !== c.evidencia) c.evidenciaFoto = "";
-    if (nuevoEstado !== "resuelto") c.fechaResolucion = "";
-    else if (previousState !== "resuelto" || !c.fechaResolucion) c.fechaResolucion = new Date().toISOString().slice(0, 10);
-    c.estado = nuevoEstado; c.verificado = verificado; c.evidencia = evidencia;
-    if (respuesta) c.comentarios.push({ autor: "Municipio de Vicente López", texto: respuesta, fecha: new Date().toISOString().slice(0, 10), muni: true });
-    state.notifications.unshift({ id: "n" + Date.now(), tipo: "municipio", titulo: "Actualización del municipio", texto: `El municipio actualizó "${c.titulo}".`, fecha: new Date().toISOString().slice(0, 10), leida: false, ref: c.id });
-    save(); render(); toast("Actualización guardada."); return;
+    if (nuevoEstado === "resuelto" && !evidencia && !file && (remove || !(c.evidenciaFoto || c.evidenciaMedia))) {
+      form.elements.evidencia.focus();
+      toast("Para cerrar el reclamo, escribí un parte o adjuntá evidencia.");
+      return;
+    }
+    submit.disabled = true;
+    const fileKey = file ? c.id + "-" + (crypto.randomUUID?.() || Date.now()) : "";
+    const today = new Date().toISOString().slice(0, 10);
+    const updated = {
+      ...c, estado: nuevoEstado, verificado, evidencia,
+      evidenciaFoto: file || remove ? "" : c.evidenciaFoto,
+      evidenciaMedia: fileKey || (remove ? "" : c.evidenciaMedia),
+      fechaResolucion: nuevoEstado === "resuelto" ? c.fechaResolucion || today : "",
+      comentarios: respuesta ? [...c.comentarios, { autor: "Municipio de Vicente López", texto: respuesta, fecha: today, muni: true }] : c.comentarios,
+    };
+    try {
+      if (file) await evidenceTransaction("readwrite", (store) => store.put(file, fileKey));
+      const index = state.claims.indexOf(c);
+      if (!form.isConnected || index === -1) {
+        if (fileKey) await removeEvidenceFile(fileKey);
+        return;
+      }
+      state.claims[index] = updated;
+      const notify = Boolean(c.owner);
+      if (notify) state.notifications.unshift({ id: "n" + Date.now(), tipo: "municipio", recipient: c.owner, titulo: "Actualización del municipio", texto: `El municipio actualizó "${c.titulo}".`, fecha: today, leida: false, ref: c.id });
+      try { persist(); }
+      catch (error) {
+        state.claims[index] = c;
+        if (notify) state.notifications.shift();
+        throw error;
+      }
+      if (c.evidenciaMedia && c.evidenciaMedia !== updated.evidenciaMedia) removeEvidenceFile(c.evidenciaMedia);
+    } catch {
+      if (fileKey) await removeEvidenceFile(fileKey);
+      toast("No se pudo guardar la actualización. Revisá el espacio disponible e intentá de nuevo.");
+      return;
+    } finally {
+      submit.disabled = false;
+    }
+    render(); toast("Actualización guardada.");
+    return;
   }
 });
 
@@ -1749,16 +1992,22 @@ window.addEventListener("hashchange", (event) => {
   const current = new URLSearchParams(query);
   const app = document.getElementById("app");
   const viewChanged = app.dataset.path !== (path || "#/");
+  if (!viewChanged && path === "#/mapa") {
+    hideChartTooltip();
+    hideButtonTooltip();
+    updateMapView(previous, current);
+    return;
+  }
   const nav = document.getElementById("sidenav");
   const menuOverlaps = mobileSidenav.matches ? nav.getBoundingClientRect().right > 0
     : nav.matches(":hover, :has(:focus-visible)") || document.body.classList.contains("sidenav-pinned")
       || nav.getBoundingClientRect().width > app.getBoundingClientRect().left + 1;
-  const useTransition = viewChanged && !menuOverlaps && typeof document.startViewTransition === "function";
+  const useTransition = viewChanged && !mobileSidenav.matches && !menuOverlaps && typeof document.startViewTransition === "function";
 
   const update = () => {
     if (revision !== routeRevision) return;
     render({ deferMotion: useTransition, fallbackTransition: viewChanged && !useTransition });
-    const isListPage = path === "#/reclamos" || path === "#/ver-reclamos";
+    const isListPage = ["#/reclamos", "#/ver-reclamos", "#/peticiones"].includes(path);
     const pageChanged = isListPage && oldPath === path && previous.get("pagina") !== current.get("pagina");
     const editorSelected = mobileSidenav.matches && path === "#/municipal" && current.has("id") && previous.get("id") !== current.get("id");
     const target = pageChanged ? document.getElementById("claim-results")

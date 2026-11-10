@@ -1,113 +1,51 @@
 # AvisAR · Vicente López
 
-Plataforma municipal participativa de reclamos para los vecinos de **Vicente López**.
-Hecha en **HTML + CSS + JavaScript vanilla**, sin build. El mapa usa una imagen local de **OpenStreetMap** y funciona sin conexión.
+Prototipo académico de participación vecinal para reportar problemas del espacio público, ubicarlos en el mapa y seguir su resolución. Los reclamos y las intervenciones iniciales son ficticios. Para gestiones reales, usá los [canales de atención de Vicente López](https://www.vicentelopez.gov.ar/canales-de-atencion/).
 
-## Cómo abrirla
+## Cómo abrir el proyecto
 
-**Opción 1 (más simple):** abrí `index.html` con doble clic.
-
-**Opción 2 (servidor local):**
+Abrí `index.html` en un navegador moderno o iniciá un servidor desde la carpeta del proyecto:
 
 ```bash
 python -m http.server 8123
-# o
-npx serve .
 ```
 
-Y entrá a `http://localhost:8123`.
+Después entrá a `http://localhost:8123`. Usar el mismo navegador y dirección permite conservar los datos locales. El servidor local es la opción más predecible para las pruebas de almacenamiento y búsqueda de direcciones.
 
-## Estructura
+## Vistas
 
-```
-avisar-web/
-├── index.html    → navbar + sidenav desplegable + footer
-├── styles.css    → sistema de diseño y layout responsive
-├── app.js        → rutas, estado (localStorage), mapa real y lógica
-└── README.md
-```
+| Ruta | Función |
+| --- | --- |
+| `#/` | Inicio, indicadores, mapa, carrusel de lugares y reclamos recientes |
+| `#/reclamos`, `#/ver-reclamos` | Listados públicos con paginación y búsqueda |
+| `#/reclamo/:id` | Detalle, apoyo, comentarios, seguimiento y evidencia municipal |
+| `#/crear`, `#/enviado/:id` | Alta por dirección o selección en el mapa y confirmación animada |
+| `#/mapa` | Zoom, agrupación, filtros y paginación de resultados en el panel lateral |
+| `#/estadisticas` | Gráficos animados con valores al pasar el cursor o enfocar con el teclado |
+| `#/peticiones` | Iniciativas habilitadas y en camino a los 100 apoyos |
+| `#/registro`, `#/login`, `#/perfil` | Cuenta local y opción de mantener la sesión |
+| `#/mis-reclamos`, `#/notificaciones` | Seguimiento personal y bandeja con borrado individual o completo |
+| `#/municipio`, `#/novedades` | Información institucional, intervenciones y selección editorial de noticias |
+| `#/municipal` | Gestión del estado, verificación, respuesta pública y adjuntos |
+| `#/contacto`, `#/preguntas`, `#/terminos` | Soporte, guía de uso y términos ficticios |
 
-## Mapa interactivo
+## Datos, navegación y archivos
 
-Acercá o alejá el mapa con la rueda o con los botones **+** y **−**. Arrastrá para recorrerlo.
-Al acercarte, las tarjetas apiladas se separan y podés abrir cada reclamo. Los controles
-también funcionan con el teclado y la vista de creación conserva la ubicación elegida al cambiar el zoom.
+- HTML, CSS y JavaScript sin compilación. `app.js` contiene el enrutador y el estado, `claim-map.js` gestiona el mapa y `civic-content.js` reúne el contenido institucional.
+- Se cargan 40 reclamos iniciales y 56 iniciativas adicionales repartidas en ocho barrios. Hay 50 iniciativas nuevas que superan los 100 apoyos y seis que todavía se acercan a la meta. Las nuevas iniciativas se incorporan también al almacenamiento previo, conservando los cambios de los reclamos existentes.
+- Cada cuenta puede apoyar un reclamo una vez. Con 100 apoyos se habilita una carta pública que se puede copiar desde Peticiones.
+- El mapa base de OpenStreetMap y las fotos se sirven como archivos locales. Los filtros actualizan marcadores y resultados sin reconstruir el mapa. La búsqueda escrita de direcciones necesita conexión a OpenStreetMap Nominatim.
+- Los reclamos, apoyos, perfiles y notificaciones se guardan en `localStorage` con la clave `avisar_vl_v2`. En el login, sin **Mantener sesión**, el acceso dura lo que dure la pestaña. Al marcarlo, el acceso persiste en el navegador.
+- El inicio de sesión y los accesos de Google, Facebook y Apple se simulan localmente. Usá datos ficticios al probarlos.
+- Para cerrar un reclamo, el panel requiere un parte de intervención o un adjunto. Acepta imágenes PNG, JPEG, WebP y GIF y videos MP4, WebM y MOV de hasta 15 MB. `evidence.js` administra esos archivos en IndexedDB. Los medios y los cambios quedan en el navegador donde se cargaron.
+- En escritorio, el menú lateral se expande en 0,8 s. En móvil se puede abrir con un gesto desde el borde izquierdo y cerrar deslizando dentro del menú.
+- Para reiniciar, borrá los datos del sitio en el navegador. Esto elimina la cuenta local, los cambios y los adjuntos de IndexedDB.
 
-Se cargan 40 reclamos iniciales. Las imágenes de archivo tienen créditos de Wikimedia Commons.
+## Créditos institucionales
 
-## Animaciones
-
-La navegación usa View Transitions cuando el navegador lo admite, con una entrada CSS como respaldo.
-Los gráficos se animan cuando entran en pantalla y el check comienza después de la transición al comprobante.
-
-## Pantallas (según flujo y wireframes)
-
-| Ruta | Pantalla |
-|------|----------|
-| `#/` | Home: mapa de Vicente López + introducción, estadísticas, categorías y últimos reclamos |
-| `#/reclamos` | Explorar reclamos con filtros (categoría, estado, palabra) |
-| `#/ver-reclamos` | Listado público, 10 reclamos por página |
-| `#/reclamo/:id` | Detalle: foto, descripción, barra de apoyo, estado reportado vs. municipal, noticias |
-| `#/crear` | Crear reclamo: categoría, descripción, selección en mapa y foto/video |
-| `#/enviado/:id` | Reclamo enviado con N° de reclamo y fecha |
-| `#/registro` | Registro (email, fecha de nacimiento, celular, contraseña + sociales) |
-| `#/login` | Inicio de sesión (+ “¿Olvidaste tu contraseña?”) |
-| `#/perfil` | Perfil del usuario |
-| `#/mis-reclamos` | Reclamos hechos por el usuario |
-| `#/notificaciones` | Notificaciones y novedades |
-| `#/municipio` | Introducción institucional del Municipio |
-| `#/municipal` | Panel municipal: estado, verificación, evidencia y respuesta |
-| `#/mapa` | Mapa de Vicente López con tarjetas, agrupamiento, zoom y filtros |
-| `#/estadisticas` | KPIs, categorías, evolución mensual y barrios |
-| `#/peticiones` | Peticiones colectivas (≥ 100 apoyos) |
-
-## Flujo implementado
-
-1. **Ingreso** al sitio (Home).
-2. **¿Está logueado?** Si no, al crear/apoyar/comentar se pide **registro o inicio de sesión**.
-3. **Explorar / buscar** reclamos por categoría y estado.
-4. **Leer detalle** y **apoyar** un reclamo existente.
-5. **Crear reclamo**: categoría + descripción + ubicación en mapa + foto/video → **Enviar**.
-6. **Reclamo enviado** con N° y fecha → “Ver mi reclamo”.
-7. **Consultar novedades y estado** en notificaciones y perfil.
-8. Se generan **estados actualizados, mensajería y anuncios**.
-9. **Introducción del Municipio** y panel de gestión.
-
-## Categorías, color e ícono
-
-| Categoría | Color | Ícono |
-|-----------|-------|-------|
-| Seguridad | `#dc2626` | Escudo |
-| Infraestructura | `#d97706` | Llave |
-| Alumbrado | `#ca8a04` | Foco |
-| Limpieza | `#16a34a` | Tacho |
-| Tránsito | `#2563eb` | Semáforo |
-
-## Barrios del mapa
-
-La Lucila, Olivos, Florida, Florida Oeste, Munro, Villa Martelli, Villa Adelina y Carapachay.
-
-## Datos y cuenta
-
-- Acceso local: cualquier email + contraseña (mín. 4 caracteres). También con los botones sociales.
-- Los reclamos, apoyos, comentarios y notificaciones se guardan en `localStorage`.
-- Reiniciar todo (borra los reclamos locales y vuelve a cargar los reclamos iniciales):
-
-```js
-localStorage.removeItem("avisar_vl_v2");
-location.reload();
-```
-
-## Reglas de negocio
-
-- Un vecino apoya un reclamo **una sola vez**.
-- A los **100 apoyos** se habilita la **petición colectiva** (carta pública copiable).
-- El municipio cambia estado, verifica y carga evidencia.
-- Un reclamo **no se marca resuelto sin evidencia**.
-
-## Nota
-
-El diseño se construyó a partir del **brief** y del **flujo + wireframes** (texto extraído del PDF). El modelo no puede recibir PDF/imágenes directamente, pero el contenido se recuperó extrayendo el texto.
+- Identidad gráfica y enlaces de atención, prensa y agenda del [Municipio de Vicente López](https://www.vicentelopez.gov.ar/).
+- La vista Novedades consulta las publicaciones del portal municipal y muestra una selección fechada si la consulta falla. También enlaza al [listado municipal actualizado](https://www.vicentelopez.gov.ar/novedades/).
+- Fotografías del partido provenientes de Wikimedia Commons. Mapa base © colaboradores de OpenStreetMap.
 
 ## Créditos de las fotos de referencia
 

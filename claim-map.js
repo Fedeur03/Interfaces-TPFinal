@@ -41,6 +41,13 @@ class ClaimMap {
 
   get scale() { return MAP_ZOOM[this.level]; }
 
+  setClaims(claims) {
+    const snapshot = this.captureMarkers();
+    this.points = claims.map((claim) => ({ claim, ...latlngToPct(claim.lat, claim.lng) }));
+    this.closeResults();
+    this.renderGroups(snapshot);
+  }
+
   resize() {
     const { clientWidth: width, clientHeight: height } = this.stage;
     if (!width || !height || (width === this.width && height === this.height)) return;
@@ -157,6 +164,8 @@ class ClaimMap {
           { opacity: 1, offset: .63 },
           { translate: "0 0", scale: 1, opacity: 1 },
         ], { duration: snapshot.duration, easing: MAP_EASE });
+      } else if (snapshot) {
+        node.animate([{ opacity: 0, scale: .9 }, { opacity: 1, scale: 1 }], { duration: snapshot.duration * .65, easing: MAP_EASE });
       }
       if (activeClaim && group.points.some(({ claim }) => claim.id === activeClaim)) nextFocus = node;
     });
@@ -183,8 +192,8 @@ class ClaimMap {
     ghost.style.left = `${x}px`;
     ghost.style.top = `${y}px`;
     this.ghosts.append(ghost);
-    const dx = (this.left + next.x * this.width * this.scale / 100 - x) * .62;
-    const dy = (this.top + next.y * this.height * this.scale / 100 - y) * .62;
+    const dx = next ? (this.left + next.x * this.width * this.scale / 100 - x) * .62 : 0;
+    const dy = next ? (this.top + next.y * this.height * this.scale / 100 - y) * .62 : 0;
     const fade = ghost.animate([
       { translate: "0 0", scale: 1, opacity },
       { translate: `${dx}px ${dy}px`, scale: .88, opacity: 0 },
