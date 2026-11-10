@@ -507,6 +507,19 @@ input, select, textarea { font: inherit; }
 .civic-card-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 225px), 1fr)); gap: 14px; }
 .civic-card-grid .btn { margin: 4px 0; }
 .civic-crosslink { margin-top: 20px; }
+.home-municipal-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(270px, .4fr); gap: 20px; align-items: start; }
+.home-news { padding: 20px; border-color: #ded6e9; background: #fbf9fd; }
+.home-news .eyebrow { color: #4f2f7d; background: #eee7f5; }
+.home-news h2 { margin: 8px 0 4px; font-size: 1.26rem; line-height: 1.2; }
+.home-news-list { list-style: none; margin: 0 0 14px; padding: 0; }
+.home-news-list li + li { border-top: 1px solid #e5deed; }
+.home-news-list a { display: block; padding: 11px 0; line-height: 1.35; overflow-wrap: anywhere; }
+.home-news-list a:hover .home-news-title { color: #4f2f7d; text-decoration: underline; text-underline-offset: 3px; }
+.home-news-date { display: block; margin-bottom: 3px; color: var(--muted); font-size: .75rem; }
+.home-news-title { font-size: .89rem; font-weight: 650; }
+@media (max-width: 900px) {
+  .home-municipal-grid { grid-template-columns: 1fr; }
+}
 .civic-impact { margin-top: clamp(40px, 8vw, 96px); }
 .civic-impact > .claim-grid, .civic-impact > .civic-card-grid { margin: 16px 0; }
 .civic-impact.is-revealed { animation: civic-arrive .65s cubic-bezier(.2,.68,.32,1) both; }

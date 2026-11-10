@@ -563,9 +563,12 @@ function renderHome() {
     </section>
 
     <section class="section" style="padding-top:0">
-      <div class="container">
-        <div class="section-head"><div><h2>Conocé Vicente López</h2><p>Un partido con costa, espacios verdes y una comunidad que participa.</p></div><a class="btn btn-ghost btn-sm" href="#/municipio">Ver el Municipio</a></div>
-        ${renderPlaceSlider()}
+      <div class="container home-municipal-grid">
+        <div class="home-places">
+          <div class="section-head"><div><h2>Conocé Vicente López</h2><p>Un partido con costa, espacios verdes y una comunidad que participa.</p></div><a class="btn btn-ghost btn-sm" href="#/municipio">Ver el Municipio</a></div>
+          ${renderPlaceSlider()}
+        </div>
+        ${renderHomeNews()}
       </div>
     </section>
 
@@ -1405,7 +1408,7 @@ function render({ deferMotion = false, fallbackTransition = false } = {}) {
   releaseEvidenceURLs();
   app.innerHTML = html;
   loadEvidenceFiles(app);
-  if (view === "novedades") updateMunicipalNews(app);
+  if (view === "home" || view === "novedades") updateMunicipalNews(app);
   const queue = app.querySelector(".municipal-list");
   const selected = queue?.querySelector("a[aria-current]");
   if (selected) {

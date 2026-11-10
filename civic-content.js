@@ -13,11 +13,27 @@ function newsCards(news) {
     ${body ? `<p>${esc(body)}</p>` : ""}<a href="${esc(new URL(url, MUNICIPAL_SITE).href)}">Leer publicación municipal →</a></article>`).join("");
 }
 
+function newsHeadlines(news) {
+  return news.slice(0, 3).map(([, date, title, , url]) => `<li>
+    <a href="${esc(new URL(url, MUNICIPAL_SITE).href)}"><span class="home-news-date">${esc(date)}</span>
+      <span class="home-news-title">${esc(title)}</span></a>
+  </li>`).join("");
+}
+
+function renderHomeNews() {
+  return `<aside class="panel home-news" aria-labelledby="home-news-heading">
+    <span class="eyebrow">${icon("building", 14)} Vicente López</span>
+    <h2 id="home-news-heading">Novedades del Municipio</h2>
+    <ul class="home-news-list" data-news-view="preview">${newsHeadlines(MUNICIPAL_NEWS)}</ul>
+    <a class="btn btn-ghost btn-sm" href="#/novedades">Ver todas las novedades <span aria-hidden="true">→</span></a>
+  </aside>`;
+}
+
 function renderNovedades() {
   return `<section class="section"><div class="container">
     <header class="civic-heading"><span class="eyebrow">Información pública</span><h1>Novedades de Vicente López</h1>
       <p class="muted" id="news-source" role="status">Selección de comunicados y actividades del portal municipal.</p></header>
-    <div class="civic-card-grid" id="municipal-news">${newsCards(MUNICIPAL_NEWS)}</div>
+    <div class="civic-card-grid" id="municipal-news" data-news-view="full">${newsCards(MUNICIPAL_NEWS)}</div>
     <div class="civic-crosslink view-actions"><a class="btn btn-primary" href="${MUNICIPAL_SITE}novedades/">Últimas novedades oficiales</a>
       <a class="btn btn-ghost" href="${MUNICIPAL_SITE}agenda-de-actividades/">Agenda actualizada</a></div>
   </div></section>`;
@@ -67,7 +83,7 @@ function renderAyuda(terminos) {
 }
 
 async function updateMunicipalNews(scope) {
-  const results = scope.querySelector("#municipal-news");
+  const results = scope.querySelector("[data-news-view]");
   if (!results) return;
   const status = scope.querySelector("#news-source");
   const text = (html) => {
@@ -88,9 +104,9 @@ async function updateMunicipalNews(scope) {
       const summary = words.length > 18 ? words.slice(0, 18).join(" ") + "…" : words.join(" ");
       return [["Portal municipal", fmtDate(post.date.slice(0, 10)), title, summary, url.href]];
     });
-    if (!news.length || !results.isConnected) return;
-    results.innerHTML = newsCards(news);
-    status.textContent = "Publicaciones recientes del portal oficial de Vicente López.";
+    if (!news.length || !results.isConnected || results.contains(document.activeElement)) return;
+    results.innerHTML = results.dataset.newsView === "preview" ? newsHeadlines(news) : newsCards(news);
+    if (status) status.textContent = "Publicaciones recientes del portal oficial de Vicente López.";
   } catch { /* La selección local sigue disponible sin conexión. */ }
 }
 
