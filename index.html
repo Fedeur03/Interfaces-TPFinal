@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="AvisAR — Plataforma municipal participativa de reclamos para los vecinos de Vicente López." />
+  <title>AvisAR · Reclamos de Vicente López</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <a class="skip-link" href="#app">Saltar al contenido</a>
+
+  <!-- ================= NAVBAR ================= -->
+  <header class="topbar">
+    <button class="icon-btn menu-btn" id="menuToggle" aria-label="Abrir menú" aria-expanded="false">
+      <span class="burger"><i></i><i></i><i></i></span>
+    </button>
+
+    <a href="#/" class="brand" aria-label="AvisAR inicio">
+      <span class="brand-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 21s-7-5.2-7-11a7 7 0 0 1 14 0c0 5.8-7 11-7 11Z"/>
+          <circle cx="12" cy="10" r="2.5"/>
+        </svg>
+      </span>
+      <span class="brand-text">Avis<strong>AR</strong><small>Vicente López</small></span>
+    </a>
+
+    <form class="topbar-search" data-form="search-home" role="search">
+      <span class="ts-ic">
+        <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+      </span>
+      <input name="q" type="search" placeholder="Buscar reclamos…" aria-label="Buscar reclamos" />
+    </form>
+
+    <div class="topbar-right">
+      <a class="icon-btn notif-btn" href="#/notificaciones" aria-label="Notificaciones">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>
+        <span class="notif-dot" id="notifDot" hidden></span>
+      </a>
+      <div id="userArea" class="user-area"></div>
+    </div>
+  </header>
+
+  <!-- ================= SIDENAV ================= -->
+  <aside class="sidenav" id="sidenav" aria-label="Menú lateral">
+    <nav class="snav">
+      <p class="snav-group">Plataforma</p>
+      <a class="snav-item" href="#/" data-nav="home" title="Inicio">
+        <span class="ic"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h5v-6h4v6h5V10"/></svg></span>
+        <span class="lbl">Inicio</span>
+      </a>
+      <a class="snav-item" href="#/reclamos" data-nav="reclamos" title="Explorar reclamos">
+        <span class="ic"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg></span>
+        <span class="lbl">Explorar reclamos</span>
+      </a>
+      <a class="snav-item" href="#/crear" data-nav="crear" title="Crear reclamo">
+        <span class="ic"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg></span>
+        <span class="lbl">Crear reclamo</span>
+      </a>
+      <a class="snav-item" href="#/mapa" data-nav="mapa" title="Mapa">
+        <span class="ic"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-7-5.2-7-11a7 7 0 0 1 14 0c0 5.8-7 11-7 11Z"/><circle cx="12" cy="10" r="2.5"/></svg></span>
+        <span class="lbl">Mapa</span>
+      </a>
+      <a class="snav-item" href="#/estadisticas" data-nav="estadisticas" title="Estadísticas">
+        <span class="ic"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 20V10"/><path d="M10 20V4"/><path d="M16 20v-7"/><path d="M22 20H2"/></svg></span>
+        <span class="lbl">Estadísticas</span>
+      </a>
+      <a class="snav-item" href="#/peticiones" data-nav="peticiones" title="Peticiones colectivas">
+        <span class="ic"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 21a6.5 6.5 0 0 1 13 0"/><path d="M17 5.5a3 3 0 0 1 0 5.8"/><path d="M19 21a6.5 6.5 0 0 0-3.5-5.8"/></svg></span>
+        <span class="lbl">Peticiones</span>
+      </a>
+
+      <p class="snav-group">Mi cuenta</p>
+      <a class="snav-item" href="#/mis-reclamos" data-nav="mis-reclamos" title="Mis reclamos">
+        <span class="ic"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8"/><path d="M8 17h5"/></svg></span>
+        <span class="lbl">Mis reclamos</span>
+      </a>
+      <a class="snav-item" href="#/notificaciones" data-nav="notificaciones" title="Notificaciones">
+        <span class="ic"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg></span>
+        <span class="lbl">Notificaciones</span>
+      </a>
+      <a class="snav-item" href="#/perfil" data-nav="perfil" title="Perfil">
+        <span class="ic"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg></span>
+        <span class="lbl">Perfil</span>
+      </a>
+
+      <p class="snav-group">Municipio</p>
+      <a class="snav-item" href="#/municipio" data-nav="municipio" title="El Municipio">
+        <span class="ic"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"/><path d="M5 21V5a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v16"/><path d="M15 21V9h2a2 2 0 0 1 2 2v10"/><path d="M9 7h2"/><path d="M9 11h2"/><path d="M9 15h2"/></svg></span>
+        <span class="lbl">El Municipio</span>
+      </a>
+      <a class="snav-item" href="#/municipal" data-nav="municipal" title="Panel municipal">
+        <span class="ic"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-2.9 1.2 2 2 0 1 1-4 0 1.7 1.7 0 0 0-2.9-1.2l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1A1.7 1.7 0 0 0 3 15a2 2 0 1 1 0-4 1.7 1.7 0 0 0 1.2-2.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1A1.7 1.7 0 0 0 10 4.6a2 2 0 1 1 4 0 1.7 1.7 0 0 0 2.9 1.2l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1A1.7 1.7 0 0 0 21 11a2 2 0 1 1 0 4z"/></svg></span>
+        <span class="lbl">Panel municipal</span>
+      </a>
+    </nav>
+
+    <div class="snav-footer">
+      <button class="snav-collapse" id="collapseBtn" aria-label="Colapsar menú" title="Colapsar menú">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+        <span class="lbl">Colapsar</span>
+      </button>
+    </div>
+  </aside>
+
+  <div class="sidenav-backdrop" id="sidenavBackdrop"></div>
+
+  <!-- ================= CONTENIDO ================= -->
+  <div class="content">
+    <main id="app" tabindex="-1"></main>
+
+    <footer class="site-footer">
+      <div class="container footer-inner">
+        <div>
+          <p class="footer-brand">Avis<strong>AR</strong></p>
+          <p class="muted">Plataforma municipal participativa de reclamos · Vicente López, Buenos Aires.</p>
+        </div>
+        <div class="footer-links">
+          <a href="#/reclamos">Explorar reclamos</a>
+          <a href="#/peticiones">Peticiones colectivas</a>
+          <a href="#/municipio">El Municipio</a>
+          <a href="#/municipal">Panel municipal</a>
+        </div>
+      </div>
+      <div class="container">
+        <p class="footer-note muted">Proyecto académico. No reemplaza los canales oficiales del municipio; los complementa.</p>
+      </div>
+    </footer>
+  </div>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>

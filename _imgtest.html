@@ -1,0 +1,8 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><title>imgtest</title></head><body>
+<img id="m" src="/assets/vl-map.jpg">
+<script>
+  const m = document.getElementById('m');
+  m.onload = () => { document.body.setAttribute('data-ok', '1'); document.body.setAttribute('data-size', m.naturalWidth + 'x' + m.naturalHeight); };
+  m.onerror = () => { document.body.setAttribute('data-ok', '0'); };
+</script>
+</body></html>

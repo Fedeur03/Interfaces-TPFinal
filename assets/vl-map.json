@@ -1,0 +1,13 @@
+{
+  "src": "assets/vl-map.jpg",
+  "zoom": 14,
+  "width": 1806,
+  "height": 1414,
+  "bounds": {
+    "north": -34.469981,
+    "south": -34.569977,
+    "west": -58.550005,
+    "east": -58.394995
+  },
+  "bytes": 712627
+}
