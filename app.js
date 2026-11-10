@@ -295,27 +295,112 @@ function selectMapLocation(location) {
   setDraftLocation(location);
 }
 
-function streetWords(text) {
-  return text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().match(/[a-z0-9]+/g)
-    ?.filter((word) => !["av", "avda", "avenida", "calle", "de", "del", "la", "las", "los"].includes(word)) || [];
+function normalizeAddressText(text) {
+  return text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
 }
 
-function locateAddressResults(rows, street, number) {
-  const words = streetWords(street);
+const STREET_PREFIXES = new Set([
+  "av", "avda", "avenida", "calle", "de", "del", "la", "las", "los",
+  "gral", "general", "pte", "presidente", "tte", "teniente", "dr", "doctor", "cnl", "coronel",
+]);
+
+function streetWords(text) {
+  return normalizeAddressText(text).match(/[a-z0-9]+/g)?.filter((word) => !STREET_PREFIXES.has(word)) || [];
+}
+
+function parseDraftAddress(input) {
+  const [line, ...suffixes] = input.split(",").map((part) => part.trim());
+  let streetLine = line;
+  let locality = suffixes[0] || "";
+  if (!locality) {
+    const normalized = normalizeAddressText(line);
+    const suffix = [...Object.keys(BARRIOS), "Vicente López"].find((name) => normalized.endsWith(" " + normalizeAddressText(name)));
+    if (suffix) {
+      streetLine = line.slice(0, -suffix.length).trim();
+      locality = suffix;
+    }
+  }
+  const match = streetLine.match(/^(.+?)\s*(?:\s+al\s+|\s+n(?:ro\.?|[°º]|úmero)?\s*|\s*#\s*|\s+)(\d+)(?:\s*[-–—]\s*(\d+))?$/i);
+  if (!match || !streetWords(match[1]).length) return null;
+  const first = Number(match[2]);
+  const last = Number(match[3] || match[2]);
+  if (!Number.isSafeInteger(first) || !Number.isSafeInteger(last) || first < 1 || last < 1) return null;
+  const low = Math.min(first, last);
+  const high = Math.max(first, last);
+  return { street: match[1].trim(), low, high, locality: normalizeAddressText(locality) };
+}
+
+function matchesStreet(queryWords, candidateName) {
+  const remaining = streetWords(candidateName);
+  const pending = [];
+  let exactName = false;
+  for (const word of queryWords) {
+    const index = word.length > 1 ? remaining.indexOf(word) : -1;
+    if (index === -1) pending.push(word);
+    else {
+      exactName = true;
+      remaining.splice(index, 1);
+    }
+  }
+  return exactName && pending.sort((a, b) => b.length - a.length).every((word) => {
+    const index = remaining.findIndex((candidate) => (word.length === 1 || candidate.length === 1) && word[0] === candidate[0]);
+    if (index < 0) return false;
+    remaining.splice(index, 1);
+    return true;
+  });
+}
+
+function locateAddressResults(rows, address, number) {
+  const words = streetWords(address.street);
   const results = [];
   for (const row of rows) {
     const { lat, lon: lng } = row.ubicacion || {};
     if (row.departamento?.id !== "06861" || row.altura?.valor !== number || !row.calle?.nombre || !row.nomenclatura) continue;
     if (!Number.isFinite(lat) || !Number.isFinite(lng)
       || lat < MAP_BOUNDS.south || lat > MAP_BOUNDS.north || lng < MAP_BOUNDS.west || lng > MAP_BOUNDS.east) continue;
-    const match = streetWords(row.calle.nombre);
-    if (!words.every((word) => match.includes(word))) continue;
+    if (!matchesStreet(words, row.calle.nombre)) continue;
     if (results.some((result) => Math.hypot(result.location.lat - lat, result.location.lng - lng) < .00018)) continue;
-    const locality = row.nomenclatura.split(",")[1]?.trim();
+    const locality = row.localidad?.nombre || row.nomenclatura.split(",")[1]?.trim() || "";
     const barrio = Object.hasOwn(BARRIOS, locality) ? locality : nearestBarrio(lat, lng);
-    results.push({ location: { lat, lng }, label: row.nomenclatura, barrio });
+    const suffix = row.nomenclatura.split(",").slice(1).join(",");
+    const label = address.low === address.high ? row.nomenclatura
+      : `${row.calle.nombre} ${address.low}–${address.high}${suffix ? "," + suffix : ""}`;
+    const preferred = Boolean(address.locality) && [locality, barrio].some((name) => normalizeAddressText(name) === address.locality);
+    results.push({ location: { lat, lng }, label, barrio, preferred });
   }
-  return results;
+  return results.sort((a, b) => Number(b.preferred) - Number(a.preferred));
+}
+
+async function lookupDraftAddress(address, signal) {
+  const midpoint = Math.round((address.low + address.high) / 2);
+  const shortStreet = streetWords(address.street).filter((word) => word.length > 1).at(-1) || address.street;
+  const queries = [["api/v2.1", address.street, midpoint]];
+  if (normalizeAddressText(shortStreet) !== normalizeAddressText(address.street)) queries.push(["api/v2.1", shortStreet, midpoint]);
+  queries.push(["api", shortStreet, midpoint]);
+  if (address.low !== address.high) {
+    for (const endpoint of new Set([address.low, address.high])) {
+      if (endpoint !== midpoint) queries.push(["api/v2.1", shortStreet, endpoint]);
+    }
+  }
+
+  let failed = false;
+  for (const [version, street, number] of queries) {
+    const query = new URLSearchParams({
+      direccion: `${street} ${number}`, provincia: "Buenos Aires", departamento: "Vicente Lopez", max: "30",
+    });
+    try {
+      const response = await fetch(`https://apis.datos.gob.ar/georef/${version}/direcciones?${query}`, { signal, credentials: "omit" });
+      if (!response.ok) throw new Error("Georef HTTP " + response.status);
+      const { direcciones = [] } = await response.json();
+      const results = locateAddressResults(direcciones, address, number);
+      if (results.length) return { results, approximateHeight: number === midpoint ? null : number };
+    } catch (error) {
+      if (signal.aborted) throw error;
+      failed = true;
+    }
+  }
+  if (failed) throw new Error("Georef no completó la búsqueda");
+  return { results: [], approximateHeight: null };
 }
 
 async function findDraftAddress() {
@@ -324,30 +409,21 @@ async function findDraftAddress() {
   if (button.disabled) return;
   clearAddressResults();
   const feedback = document.getElementById("addressFeedback");
-  const address = input.value.split(",")[0].trim();
-  const parts = address.match(/^(.+?)\s+(\d+)$/);
-  if (!parts || !streetWords(parts[1]).length) {
-    feedback.textContent = "Escribí la calle y el número, por ejemplo Maipú 2609.";
+  const address = parseDraftAddress(input.value);
+  if (!address) {
+    feedback.textContent = "Escribí una calle y una altura, o un tramo como Maipú 1100–1200.";
     input.focus();
     return;
   }
 
   const controller = new AbortController();
   addressRequest = controller;
-  const timeout = setTimeout(() => controller.abort(), 10000);
+  const timeout = setTimeout(() => controller.abort(), 16000);
   button.disabled = true;
   feedback.textContent = "Buscando la dirección…";
-  const query = new URLSearchParams({
-    direccion: address, provincia: "Buenos Aires", departamento: "Vicente Lopez", max: "15",
-  });
   try {
-    const response = await fetch("https://apis.datos.gob.ar/georef/api/v2.1/direcciones?" + query, {
-      signal: controller.signal, credentials: "omit",
-    });
-    if (!response.ok) throw new Error("Georef HTTP " + response.status);
-    const { direcciones = [] } = await response.json();
+    const { results, approximateHeight } = await lookupDraftAddress(address, controller.signal);
     if (addressRequest !== controller || !input.isConnected || location.hash.split("?")[0] !== "#/crear") return;
-    const results = locateAddressResults(direcciones, parts[1], Number(parts[2]));
     if (!results.length) {
       feedback.textContent = "No encontramos esa dirección en Vicente López. Revisá la calle y el número o marcá un punto en el mapa.";
       return;
@@ -358,8 +434,14 @@ async function findDraftAddress() {
       map.showPin(result.location);
     };
     choose(results[0]);
-    feedback.textContent = results.length === 1 ? "Dirección marcada. Revisá el punto antes de enviar."
-      : "Hay varias coincidencias. Revisá el punto o elegí otra dirección.";
+    if (address.low !== address.high) {
+      const message = approximateHeight === null ? "Marcamos un punto aproximado en el tramo."
+        : `Marcamos la altura ${approximateHeight} como referencia del tramo.`;
+      feedback.textContent = message + (results.length > 1 ? " Podés elegir otra coincidencia." : " Revisá el punto antes de enviar.");
+    } else {
+      feedback.textContent = results.length === 1 ? "Dirección marcada. Revisá el punto antes de enviar."
+        : "Hay varias coincidencias. Revisá el punto o elegí otra dirección.";
+    }
     if (results.length > 1) {
       const matches = document.getElementById("addressMatches");
       results.forEach((result, i) => matches.add(new Option(`${i + 1}. ${result.label}`, i)));
@@ -693,10 +775,10 @@ function renderCrear() {
         <div class="field"><h3>Ubicación del reclamo</h3>
           <label for="draftAddress">Dirección</label>
           <div class="address-search">
-            <input class="input" id="draftAddress" name="direccion" type="search" maxlength="140" autocomplete="off" value="${esc(draftAddress)}" placeholder="Calle y número" aria-describedby="addressHelp addressFeedback">
+            <input class="input" id="draftAddress" name="direccion" type="search" maxlength="140" autocomplete="off" value="${esc(draftAddress)}" placeholder="Calle y altura o tramo" aria-describedby="addressHelp addressFeedback">
             <button type="button" class="btn btn-ghost" data-action="find-address">${icon("search", 16)} Buscar</button>
           </div>
-          <span class="hint" id="addressHelp">Buscá dentro de Vicente López o marcá el lugar directamente en el mapa.</span>
+          <span class="hint" id="addressHelp">Escribí calle y altura (o un rango), o marcá el lugar directamente en el mapa.</span>
           <span class="hint address-feedback" id="addressFeedback" role="status"></span>
           <div class="field address-choices" hidden><label for="addressMatches">Coincidencias</label><select class="input" id="addressMatches"></select></div>
           <div class="map-card map-card-pick">${reportMap(state.claims, { pick: true, focus: draftPicked ? draftLatLng : undefined, cls: "pick-map" })}</div>
@@ -713,11 +795,13 @@ function renderEnviado(id) {
   if (!c) return renderVerReclamos();
   return `
     <section class="section"><div class="container"><div class="success-card is-success-pending">
-      <div class="success-badge" aria-hidden="true"><span class="success-sparks"></span><svg viewBox="0 0 76 76" width="76" height="76" fill="none">
-        <circle class="success-track" cx="38" cy="38" r="31"/>
-        <circle class="success-ring" cx="38" cy="38" r="31" pathLength="100" transform="rotate(-90 38 38)"/>
-        <path class="success-guide" d="M24 39l10 10 19-22"/>
-        <path class="success-tick" d="M24 39l10 10 19-22" pathLength="100"/>
+      <div class="success-badge" aria-hidden="true"><svg viewBox="0 0 76 76" width="76" height="76" fill="none">
+        <g class="success-drawing">
+          <circle class="success-track" cx="38" cy="38" r="28"/>
+          <circle class="success-ring" cx="38" cy="38" r="28" pathLength="100" transform="rotate(-90 38 38)"/>
+          <path class="success-tick" d="M24 39l10 10 19-22" pathLength="100"/>
+        </g>
+        <path class="success-burst" d="M38 1v-5 M65 10l5-5 M75 37h6 M65 64l5 5 M38 75v5 M11 64l-5 5 M1 37h-6 M11 10l-5-5" pathLength="100"/>
       </svg></div>
       <h1>¡Reclamo enviado con éxito!</h1>
       <p class="muted" role="status">Tu reclamo ya está en el mapa y los vecinos pueden apoyarlo.</p>
