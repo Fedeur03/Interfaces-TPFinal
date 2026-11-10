@@ -37,6 +37,7 @@ Después entrá a `http://localhost:8123`. Usar el mismo navegador y dirección 
 - El mapa base de OpenStreetMap y las fotos se sirven como archivos locales. Los filtros actualizan marcadores y resultados sin reconstruir el mapa. La búsqueda escrita de direcciones necesita conexión a OpenStreetMap Nominatim.
 - Los reclamos, apoyos, perfiles y notificaciones se guardan en `localStorage` con la clave `avisar_vl_v2`. En el login, sin **Mantener sesión**, el acceso dura lo que dure la pestaña. Al marcarlo, el acceso persiste en el navegador.
 - El inicio de sesión y los accesos de Google, Facebook y Apple se simulan localmente. Usá datos ficticios al probarlos.
+- El panel municipal se habilita con la cuenta de prueba `admin@avisar.test` y la contraseña `admin123`. El acceso se valida en el navegador y las credenciales son públicas en el código de la maqueta. Para proteger datos reales se requiere autenticación y autorización en un servidor.
 - Para cerrar un reclamo, el panel requiere un parte de intervención o un adjunto. Acepta imágenes PNG, JPEG, WebP y GIF y videos MP4, WebM y MOV de hasta 15 MB. `evidence.js` administra esos archivos en IndexedDB. Los medios y los cambios quedan en el navegador donde se cargaron.
 - En escritorio, el menú lateral se expande en 0,8 s. En móvil se puede abrir con un gesto desde el borde izquierdo y cerrar deslizando dentro del menú.
 - Para reiniciar, borrá los datos del sitio en el navegador. Esto elimina la cuenta local, los cambios y los adjuntos de IndexedDB.

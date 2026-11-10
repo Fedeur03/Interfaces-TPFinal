@@ -4,6 +4,8 @@ const STORE_KEY = "avisar_vl_v2";
 const THRESHOLD = 100;
 const EMPTY_SESSION = { logged: false, email: "", nombre: "" };
 const SESSION_KEY = STORE_KEY + "_session";
+const ADMIN_EMAIL = "admin@avisar.test";
+const ADMIN_PASSWORD = "admin123";
 const CATEGORY_COLOR = "#39776d";
 
 const CATEGORIES = {
@@ -38,6 +40,7 @@ const ICONS = {
   water: '<path d="M12 3c3 4 6 7.5 6 11a6 6 0 0 1-12 0c0-3.5 3-7 6-11Z"/>',
   support: '<path d="M7 10v11H4V10h3z"/><path d="M7 10l4-8a2 2 0 0 1 2 2v4h5a2 2 0 0 1 2 2.4l-1.2 6A2 2 0 0 1 16.8 21H7"/>',
   check: '<path d="M20 6L9 17l-5-5"/>',
+  "check-ring": '<circle cx="12" cy="12" r="9"/><path d="m8 12 2.5 2.5 5.5-5.5"/>',
   clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
   chart: '<path d="M4 20V10"/><path d="M10 20V4"/><path d="M16 20v-7"/><path d="M22 20H2"/>',
   plus: '<path d="M12 5v14"/><path d="M5 12h14"/>',
@@ -126,6 +129,16 @@ function normalizeProfile(profile) {
   return profile;
 }
 
+function hasMunicipalAccess(session = state.session) {
+  return Boolean(session?.logged && session.email === ADMIN_EMAIL && session.role === "municipal-admin");
+}
+
+function normalizeSession(session) {
+  const profile = normalizeProfile(session);
+  if (!profile || (profile.email?.toLowerCase() === ADMIN_EMAIL && !hasMunicipalAccess(profile))) return { ...EMPTY_SESSION };
+  return profile;
+}
+
 function browserSession() {
   try { return JSON.parse(sessionStorage.getItem(SESSION_KEY)); }
   catch { return null; }
@@ -151,7 +164,7 @@ function loadState() {
         const ids = new Set(p.claims.map((claim) => claim.id));
         const missing = (p.demoSeeded ? makePetitionClaims() : makeDemoClaims().concat(makePetitionClaims()))
           .filter((sample) => !ids.has(sample.id));
-        const session = normalizeProfile(browserSession() || p.session) || { ...EMPTY_SESSION };
+        const session = normalizeSession(browserSession() || p.session);
         return {
           claims: p.claims.concat(missing),
           demoSeeded: true,
@@ -165,7 +178,7 @@ function loadState() {
     }
   } catch (e) { /* ignore */ }
   const initial = defaults();
-  initial.session = normalizeProfile(browserSession()) || initial.session;
+  initial.session = normalizeSession(browserSession());
   return initial;
 }
 
@@ -500,15 +513,16 @@ function updateShell(view) {
   if (dot) dot.hidden = unread === 0;
   const activeMap = { reclamo: "reclamos", enviado: "crear" };
   const active = activeMap[view] || view;
+  document.querySelector('[data-nav="municipal"]').hidden = !hasMunicipalAccess();
   document.querySelectorAll("[data-nav]").forEach((a) => a.classList.toggle("is-active", a.dataset.nav === active));
 }
 
-function authGate(title, text) {
+function authGate(title, text, { municipal = false } = {}) {
   const next = encodeURIComponent(location.hash || "#/");
   return `<section class="section"><div class="container"><div class="auth-wrap"><div class="auth-card center">
-    <span class="brand-mark" style="margin:0 auto 14px;width:52px;height:52px;border-radius:14px">${icon("user", 26)}</span>
+    <span class="brand-mark" style="margin:0 auto 14px;width:52px;height:52px;border-radius:14px">${icon(municipal ? "lock" : "user", 26)}</span>
     <h1>${esc(title)}</h1><p class="sub">${esc(text)}</p>
-    <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap"><a class="btn btn-primary" href="#/login?next=${next}">Iniciar sesión</a><a class="btn btn-ghost" href="#/registro?next=${next}">Crear cuenta</a></div>
+    <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap"><a class="btn btn-primary" href="#/login?next=${next}">${municipal ? "Ingresar como administrador" : "Iniciar sesión"}</a>${municipal ? "" : `<a class="btn btn-ghost" href="#/registro?next=${next}">Crear cuenta</a>`}</div>
   </div></div></div></section>`;
 }
 
@@ -546,9 +560,9 @@ function renderHome() {
     <section class="section" style="padding-top:30px">
       <div class="container">
         <div class="stat-cards">
-          <div class="stat-card"><span class="ic" style="color:var(--primary);background:var(--primary-soft)">${icon("doc", 20)}</span><div><div class="n">${total}</div><div class="l">Reclamos en el municipio</div></div></div>
-          <div class="stat-card"><span class="ic" style="color:var(--accent);background:var(--accent-soft)">${icon("support", 20)}</span><div><div class="n">${apoyos}</div><div class="l">Apoyos ciudadanos</div></div></div>
-          <div class="stat-card"><span class="ic" style="color:var(--ok);background:var(--ok-soft)">${icon("check", 20)}</span><div><div class="n">${resueltos}</div><div class="l">Resueltos con evidencia</div></div></div>
+          <div class="stat-card"><span class="ic">${icon("doc", 32, 1.9)}</span><div><div class="n">${total}</div><div class="l">Reclamos en el municipio</div></div></div>
+          <div class="stat-card stat-support"><span class="ic">${icon("support", 32, 1.9)}</span><div><div class="n">${apoyos}</div><div class="l">Apoyos ciudadanos</div></div></div>
+          <div class="stat-card stat-resolved"><span class="ic">${icon("check-ring", 34, 1.9)}</span><div><div class="n">${resueltos}</div><div class="l">Resueltos con evidencia</div></div></div>
         </div>
       </div>
     </section>
@@ -558,7 +572,7 @@ function renderHome() {
         <div class="section-head"><div><h2>Explorá por categoría</h2><p>Encontrá los reclamos que más te interesan.</p></div><a class="btn btn-ghost btn-sm" href="#/reclamos">Ver todos</a></div>
         <div class="cat-grid">${Object.entries(CATEGORIES).map(([key, c]) => {
           const n = claims.filter((x) => x.categoria === key).length;
-          return `<a class="cat-card" href="#/reclamos?cat=${key}" style="--c:${c.color}"><span class="ic">${icon(c.icon, 20)}</span><span class="name">${c.label}</span><span class="count">${n} ${n === 1 ? "reclamo" : "reclamos"}</span></a>`;
+          return `<a class="cat-card" href="#/reclamos?cat=${key}" style="--c:${c.color}"><span class="ic">${icon(c.icon, 32, 1.9)}</span><span class="name">${c.label}</span><span class="count">${n} ${n === 1 ? "reclamo" : "reclamos"}</span></a>`;
         }).join("")}</div>
       </div>
     </section>
@@ -905,6 +919,7 @@ function renderLogin() {
 function renderPerfil() {
   if (!state.session.logged) return authGate("Ingresá a tu perfil", "Iniciá sesión para ver tus datos y tus reclamos.");
   const account = state.session;
+  const municipal = hasMunicipalAccess();
   const mine = state.claims.filter((c) => c.owner === account.email);
   return `<section class="section"><div class="container">
     <div class="section-head"><div><h2>Mi cuenta</h2><p>Administrá tus datos y preferencias.</p></div></div>
@@ -912,7 +927,7 @@ function renderPerfil() {
       <aside class="panel panel-pad account-summary">
         <div class="avatar-lg">${esc(initials(account.nombre))}</div>
         <h3>${esc(account.nombre)}</h3><p class="muted">${esc(account.email)}</p>
-        <hr class="divider"><p><strong>Cuenta vecinal</strong></p>
+        <hr class="divider"><p><strong>${municipal ? "Administración municipal" : "Cuenta vecinal"}</strong></p>
         <p>Barrio <strong>${esc(account.barrio || "Sin indicar")}</strong></p>
         <a class="btn btn-ghost" href="#/mis-reclamos">Mis reclamos · ${mine.length}</a>
       </aside>
@@ -920,7 +935,7 @@ function renderPerfil() {
         <div class="panel panel-pad"><h3>Datos personales</h3><p class="muted">Actualizá la información de tu cuenta.</p>
           <div class="row2">
             <div class="field"><label for="pnombre">Nombre y apellido</label><input class="input" id="pnombre" name="nombre" value="${esc(account.nombre)}" autocomplete="name" required></div>
-            <div class="field"><label for="pemail">Correo electrónico</label><input class="input" id="pemail" name="email" type="email" autocomplete="email" value="${esc(account.email)}" required></div>
+            <div class="field"><label for="pemail">Correo electrónico</label><input class="input" id="pemail" name="email" type="email" autocomplete="email" value="${esc(account.email)}" ${municipal ? "readonly" : "required"}></div>
             <div class="field"><label for="pbarrio">Barrio</label><select class="input" id="pbarrio" name="barrio"><option value="">Sin indicar</option>${Object.keys(BARRIOS).map((b) => `<option ${b === account.barrio ? "selected" : ""}>${esc(b)}</option>`).join("")}</select></div>
             <div class="field"><label for="ptel">Teléfono</label><input class="input" id="ptel" name="celular" type="tel" autocomplete="tel" value="${esc(account.celular || "")}"></div>
           </div>
@@ -967,17 +982,19 @@ function renderMunicipio() {
   return `<section class="section"><div class="container muni-intro">
     <div class="muni-intro-row">
       <div><span class="eyebrow">${icon("building", 15)} Vicente López</span><h1>Conocé tu Municipio</h1>
-        <p>Trabajamos para mejorar la ciudad, brindar servicios y promover la participación de los vecinos.</p>
-        <p>En AvisAR podés informar problemas de tu barrio y seguir el estado de cada reclamo.</p>
+        <p>Vicente López está en el norte del Gran Buenos Aires, a orillas del Río de la Plata. Sus nueve barrios reúnen zonas residenciales, centros comerciales y espacios de encuentro como el Paseo de la Costa.</p>
+        <p>El partido se creó el <strong>21 de diciembre de 1905</strong>, al separarse de San Isidro, y Olivos quedó como cabecera. Las fechas que recuerdan el origen de cada barrio quedaron reunidas en el <a href="https://www.vicentelopez.gov.ar/boletin_oficial/bulletin/uploads/historical/1533.pdf#page=14">Boletín Municipal</a>.</p>
       </div>
       <img src="assets/municipio-costa.jpg" alt="Paseo de la Costa de Vicente López">
     </div>
     <div class="muni-intro-row">
       <img src="assets/municipio-edificio.jpg" alt="Edificio municipal de Vicente López">
-      <div><h2>Un Municipio más cerca tuyo</h2><p>Queremos escuchar a los vecinos y atender las necesidades de cada barrio.</p>
+      <div><h2>De la memoria barrial a la participación</h2>
+        <p>Los estudios Lumiton, en Munro, fueron pioneros del cine sonoro argentino. Hoy el museo conserva su legado. En Olivos, el Museo de la Ciudad recorre la historia de los nueve barrios. <a href="https://www.vicentelopez.gov.ar/espacio-vl/museo-lumiton/">Museo Lumiton</a> · <a href="https://www.vicentelopez.gov.ar/espacio-vl/museo-de-la-ciudad-de-vicente-lopez/">Museo de la Ciudad</a>.</p>
+        <p>En AvisAR podés señalar problemas del espacio público, acompañar los reclamos de otros vecinos y seguir las intervenciones que se registran en tu barrio.</p>
         <div class="muni-actions">
           <a class="btn btn-primary" href="#/crear">${icon("plus", 17)} Realizar reclamo</a>
-          <a class="btn btn-ghost" href="#/municipal">${icon("building", 17)} Abrir panel municipal</a>
+          ${hasMunicipalAccess() ? `<a class="btn btn-ghost" href="#/municipal">${icon("building", 17)} Abrir panel municipal</a>` : ""}
         </div>
       </div>
     </div>
@@ -1031,6 +1048,7 @@ function municipalEditor(c) {
 }
 
 function renderMunicipal() {
+  if (!hasMunicipalAccess()) return authGate("Acceso municipal restringido", "Este panel está reservado para la cuenta administradora de AvisAR.", { municipal: true });
   const claims = state.claims;
   const { params } = getRoute();
   const selectedId = params.get("id");
@@ -1461,26 +1479,37 @@ function accountNotifications() {
 }
 
 function saveProfile() {
-  const { logged, remember, ...profile } = state.session;
+  const { logged, remember, role, ...profile } = state.session;
   try {
     if (remember === false) sessionStorage.setItem(SESSION_KEY, JSON.stringify(state.session));
     else sessionStorage.removeItem(SESSION_KEY);
   } catch { /* storage may be unavailable */ }
-  state.profiles = state.profiles.filter((p) => p.email !== profile.email);
-  state.profiles.push(profile);
+  if (!hasMunicipalAccess()) {
+    state.profiles = state.profiles.filter((p) => p.email !== profile.email);
+    state.profiles.push(profile);
+  }
   save();
 }
 
 function loginDemo(email, nombre, details = {}, remember = true) {
+  if (email.toLowerCase() === ADMIN_EMAIL) {
+    toast("Ese correo está reservado para la cuenta administradora.");
+    return;
+  }
   const knownEmail = state.profiles.find((p) => p.email.toLowerCase() === email.toLowerCase())?.email
     || state.claims.find((c) => c.owner?.toLowerCase() === email.toLowerCase())?.owner;
   email = knownEmail || email.toLowerCase();
   state.session = { logged: true, email, nombre: nombre || email.split("@")[0].replace(/[._-]/g, " ").replace(/\b\w/g, (m) => m.toUpperCase()) };
   Object.assign(state.session, state.profiles.find((p) => p.email === email), details, { remember });
+  delete state.session.role;
+  finishLogin("#/");
+}
+
+function finishLogin(defaultRoute) {
   saveProfile();
   const { params } = getRoute();
   const next = params.get("next");
-  location.hash = next && next.startsWith("#") ? next : "#/";
+  location.hash = next && next.startsWith("#") ? next : defaultRoute;
   toast("¡Bienvenido/a, " + state.session.nombre + "!");
 }
 
@@ -1934,6 +1963,10 @@ document.addEventListener("submit", async (e) => {
     if (!nombre) { toast("Ingresá tu nombre."); return; }
     const previousEmail = state.session.email;
     const email = String(data.get("email") || "").trim().toLowerCase();
+    if (email !== previousEmail && (email === ADMIN_EMAIL || hasMunicipalAccess())) {
+      toast("El correo de la cuenta administradora está reservado.");
+      return;
+    }
     if (email !== previousEmail) {
       const emailInUse = state.profiles.some((p) => p.email.toLowerCase() === email && p.email !== previousEmail)
         || state.claims.some((c) => c.owner?.toLowerCase() === email && c.owner !== previousEmail);
@@ -1960,8 +1993,19 @@ document.addEventListener("submit", async (e) => {
     const data = new FormData(form);
     const email = String(data.get("email") || "").trim();
     const pass = String(data.get("password") || "");
+    if (email.toLowerCase() === ADMIN_EMAIL) {
+      if (pass !== ADMIN_PASSWORD) { toast("Revisá el email y la contraseña."); return; }
+      state.session = { logged: true, email: ADMIN_EMAIL, nombre: "Administración municipal", role: "municipal-admin", remember: data.has("remember") };
+      finishLogin("#/municipal");
+      return;
+    }
     if (!email || pass.length < 4) { toast("Revisá el email y la contraseña."); return; }
     loginDemo(email, undefined, {}, data.has("remember")); return;
+  }
+
+  if ((kind === "municipal-search" || kind === "municipal") && !hasMunicipalAccess()) {
+    toast("El panel requiere la cuenta administradora.");
+    return;
   }
 
   if (kind === "municipal-search") {
@@ -2002,7 +2046,7 @@ document.addEventListener("submit", async (e) => {
     try {
       if (file) await evidenceTransaction("readwrite", (store) => store.put(file, fileKey));
       const index = state.claims.indexOf(c);
-      if (!form.isConnected || index === -1) {
+      if (!form.isConnected || index === -1 || !hasMunicipalAccess()) {
         if (fileKey) await removeEvidenceFile(fileKey);
         return;
       }
