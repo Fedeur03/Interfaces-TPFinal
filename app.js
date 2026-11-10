@@ -185,6 +185,7 @@ function persist() {
 function save() { try { persist(); } catch { /* storage may be full */ } }
 function ownSupports() { return Object.hasOwn(state.supported, state.session.email) ? state.supported[state.session.email] : []; }
 function getClaim(id) { return state.claims.find((c) => c.id === id); }
+function ownsClaim(claim) { return Boolean(state.session.logged && state.session.email && claim?.owner === state.session.email); }
 
 /* ---------------- Helpers ---------------- */
 function esc(str) {
@@ -712,7 +713,19 @@ function renderReclamo(id) {
       <div class="detail-grid">
         <div>
           <div class="panel panel-pad">
-            <div style="display:flex;gap:8px;flex-wrap:wrap">${catChip(c.categoria)}${statusBadge(c.estado)}${c.verificado ? '<span class="badge badge-verified">' + icon("check", 13) + " Verificado</span>" : ""}</div>
+            <div class="claim-detail-actions">
+              <div class="claim-detail-badges">${catChip(c.categoria)}${statusBadge(c.estado)}${c.verificado ? '<span class="badge badge-verified">' + icon("check", 13) + " Verificado</span>" : ""}</div>
+              ${ownsClaim(c) ? `<button type="button" class="btn btn-ghost btn-sm claim-delete-trigger" data-action="open-delete-claim" data-id="${esc(c.id)}">${icon("limpieza", 16)} Borrar reclamo</button>
+              <dialog id="claim-delete-dialog" class="modal claim-delete-dialog" aria-labelledby="claim-delete-heading" aria-describedby="claim-delete-description">
+                <h2 id="claim-delete-heading">¿Borrar este reclamo?</h2>
+                <p id="claim-delete-description">Se eliminará «${esc(c.titulo)}» junto con sus comentarios y apoyos. El borrado es definitivo.</p>
+                <p class="claim-delete-error" role="alert"></p>
+                <form method="dialog" class="claim-delete-actions">
+                  <button type="submit" class="btn btn-ghost" autofocus>Cancelar</button>
+                  <button type="button" class="btn claim-delete-confirm" data-action="confirm-delete-claim" data-id="${esc(c.id)}">Borrar definitivamente</button>
+                </form>
+              </dialog>` : ""}
+            </div>
             <h1 class="detail-title">${esc(c.titulo)}</h1>
             <div class="detail-meta">
               <span style="display:inline-flex;align-items:center;gap:6px">${icon("calendar", 16)} Publicado el ${fmtDate(c.fecha)}</span>
@@ -1407,6 +1420,7 @@ function render({ deferMotion = false, fallbackTransition = false } = {}) {
   hideButtonTooltip();
   releaseEvidenceURLs();
   app.innerHTML = html;
+  updateImpactCards(app);
   loadEvidenceFiles(app);
   if (view === "home" || view === "novedades") updateMunicipalNews(app);
   const queue = app.querySelector(".municipal-list");
@@ -1531,6 +1545,29 @@ function supportClaim(id) {
   state.supported[state.session.email] = [...ownSupports(), id];
   state.notifications.unshift({ id: "n" + Date.now(), tipo: "apoyo", recipient: state.session.email, titulo: "Apoyo registrado", texto: `Apoyaste "${c.titulo}".`, fecha: new Date().toISOString().slice(0, 10), leida: false, ref: c.id });
   save(); render(); toast("¡Gracias! Tu apoyo quedó registrado.");
+}
+
+function deleteOwnClaim(id, dialog) {
+  const claim = getClaim(id);
+  if (!dialog?.open || !ownsClaim(claim)) return;
+  const previous = state;
+  state = {
+    ...state,
+    claims: state.claims.filter((item) => item.id !== id),
+    notifications: state.notifications.filter((notice) => notice.ref !== id),
+    supported: Object.fromEntries(Object.entries(state.supported).map(([email, ids]) => [email, ids.filter((item) => item !== id)])),
+  };
+  try {
+    persist();
+  } catch {
+    state = previous;
+    dialog.querySelector(".claim-delete-error").textContent = "No se pudo guardar el borrado. Volvé a intentarlo.";
+    return;
+  }
+  dialog.close();
+  if (claim.evidenciaMedia) removeEvidenceFile(claim.evidenciaMedia);
+  location.hash = "#/mis-reclamos";
+  toast("Reclamo borrado.");
 }
 
 function openLetter(id) {
@@ -1714,6 +1751,16 @@ document.addEventListener("click", (e) => {
   if (t.closest("#sidenavBackdrop")) { setSidenav(false); return; }
   if (t.closest(".snav-item") && mobileSidenav.matches) setSidenav(false);
 
+  const openDelete = t.closest('[data-action="open-delete-claim"]');
+  if (openDelete) {
+    if (ownsClaim(getClaim(openDelete.dataset.id))) document.getElementById("claim-delete-dialog").showModal();
+    return;
+  }
+  const confirmDelete = t.closest('[data-action="confirm-delete-claim"]');
+  if (confirmDelete) {
+    deleteOwnClaim(confirmDelete.dataset.id, confirmDelete.closest("dialog"));
+    return;
+  }
   const supportBtn = t.closest('[data-action="support"]');
   if (supportBtn) { supportClaim(supportBtn.dataset.id); return; }
   const letterBtn = t.closest('[data-action="letter"]');

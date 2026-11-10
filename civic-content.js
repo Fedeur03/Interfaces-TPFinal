@@ -134,16 +134,92 @@ function renderPlaceSlider() {
   </div>`;
 }
 
+const impactGraphics = {
+  check: '<path d="M24 6a18 18 0 1 1 0 36 18 18 0 1 1 0-36Z"/><path class="impact-stroke-late" d="m15 24 6 6 13-13"/>',
+  map: '<path d="m6 15 12-5 12 5 12-5v25l-12 5-12-5-12 5V15Zm12-5v25m12-20v25"/><path class="impact-stroke-late" d="M34 16c0 4-5 8-5 8s-5-4-5-8a5 5 0 1 1 10 0Z"/>',
+  chart: '<path d="M8 10v28h32"/><path class="impact-stroke-late" d="m13 30 8-8 6 4 12-13m-8 0h8v8"/>',
+};
+
+function impactCard(kind, title, description, count, link = "") {
+  const heading = count === undefined ? title : `<span data-impact-count="${count}" aria-hidden="true">${count}</span> ${title}`;
+  return `<article class="panel panel-pad impact-card impact-${kind}">
+    <svg class="impact-icon" width="48" height="48" viewBox="0 0 48 48" fill="none" aria-hidden="true">${impactGraphics[kind]}</svg>
+    <h3 ${count === undefined ? "" : `aria-label="${count} ${title}"`}>${heading}</h3><p>${description}</p>${link}
+    <div class="impact-track" aria-hidden="true"></div>
+  </article>`;
+}
+
+const impactReducedMotion = matchMedia("(prefers-reduced-motion: reduce)");
+let impactCards = [];
+let impactFrame = 0;
+
+function drawImpactCards() {
+  impactFrame = 0;
+  const viewport = window.visualViewport?.height || window.innerHeight;
+  const viewportTop = window.visualViewport?.offsetTop || 0;
+  const columns = impactCards[0]?.card.parentElement;
+  const stagger = columns && getComputedStyle(columns).gridTemplateColumns.split(" ").length > 1;
+  const progressByCard = impactCards.map(({ card }, index) => {
+    const start = viewportTop + viewport * .93 - (stagger ? index * 28 : 0);
+    return impactReducedMotion.matches ? 1 : clamp((start - card.getBoundingClientRect().top) / Math.min(360, viewport * .48), 0, 1);
+  });
+  impactCards.forEach((item, index) => {
+    const progress = progressByCard[index];
+    if (item.progress === progress) return;
+    item.progress = progress;
+    const { card, strokes, count } = item;
+    card.style.setProperty("--impact-progress", progress.toFixed(3));
+    strokes.forEach(({ shape, length, start, end }) => {
+      const drawn = clamp((progress - start) / (end - start), 0, 1);
+      shape.setAttribute("stroke-dashoffset", (length * (1 - drawn)).toFixed(3));
+      shape.setAttribute("visibility", drawn > 0 ? "visible" : "hidden");
+    });
+    if (count) {
+      const value = String(Math.round(Number(count.dataset.impactCount) * progress));
+      if (count.textContent !== value) count.textContent = value;
+    }
+  });
+}
+
+function queueImpactDraw() {
+  if (impactCards.length && !impactFrame) impactFrame = requestAnimationFrame(drawImpactCards);
+}
+
+const impactLayoutObserver = new ResizeObserver(queueImpactDraw);
+
+function updateImpactCards(scope) {
+  if (impactFrame) cancelAnimationFrame(impactFrame);
+  impactLayoutObserver.disconnect();
+  impactCards = [...scope.querySelectorAll(".impact-card")].map((card) => ({
+    card,
+    count: card.querySelector("[data-impact-count]"),
+    strokes: [...card.querySelectorAll(".impact-icon path")].map((shape) => {
+      const length = shape.getTotalLength();
+      shape.setAttribute("stroke-dasharray", `${length} ${length}`);
+      return shape.classList.contains("impact-stroke-late")
+        ? { shape, length, start: .2, end: 1 }
+        : { shape, length, start: 0, end: .75 };
+    }),
+  }));
+  if (impactCards.length) impactLayoutObserver.observe(scope);
+  drawImpactCards();
+}
+
+window.addEventListener("scroll", queueImpactDraw, { passive: true });
+window.addEventListener("resize", queueImpactDraw);
+window.visualViewport?.addEventListener("resize", queueImpactDraw);
+impactReducedMotion.addEventListener("change", queueImpactDraw);
+
 function renderMunicipalImpact() {
   const closed = state.claims.filter((claim) => claim.estado === "resuelto" && (claim.evidencia || claim.evidenciaFoto || claim.evidenciaMedia))
     .sort((a, b) => (b.fechaResolucion || b.fecha).localeCompare(a.fechaResolucion || a.fecha));
-  return `<div class="civic-impact" data-reveal>
+  return `<div class="civic-impact">
     <span class="eyebrow">Gestión a la vista</span><h2>Lo que cambia cuando avisás</h2>
     <p>Un problema ubicado en el mapa puede pasar de un aviso vecinal a una intervención documentada. En AvisAR podés seguir ese recorrido de principio a fin.</p>
-    <div class="civic-card-grid">
-      <article class="panel panel-pad"><h3>${closed.length} intervenciones documentadas</h3><p>Consultá el parte y, cuando esté disponible, la evidencia visual de cada solución registrada.</p></article>
-      <article class="panel panel-pad"><h3>${Object.keys(BARRIOS).length} barrios en el mapa</h3><p>Encontrá los reportes cercanos y verificá si el problema ya está en seguimiento.</p></article>
-      <article class="panel panel-pad"><h3>Avances visibles</h3><p>El historial y las estadísticas permiten ver qué se resolvió y qué sigue en gestión.</p><a href="#/estadisticas">Consultar estadísticas →</a></article>
+    <div class="civic-card-grid impact-grid">
+      ${impactCard("check", "intervenciones documentadas", "Consultá el parte y, cuando esté disponible, la evidencia visual de cada solución registrada.", closed.length)}
+      ${impactCard("map", "barrios en el mapa", "Encontrá los reportes cercanos y verificá si el problema ya está en seguimiento.", Object.keys(BARRIOS).length)}
+      ${impactCard("chart", "Avances visibles", "El historial y las estadísticas permiten ver qué se resolvió y qué sigue en gestión.", undefined, '<a href="#/estadisticas">Consultar estadísticas →</a>')}
     </div>
   </div>
   ${closed.length ? `<div class="civic-impact" data-reveal><h2>Soluciones recientes</h2><div class="claim-grid">${closed.slice(0, 3).map(claimCard).join("")}</div><a class="btn btn-ghost" href="#/reclamos?estado=resuelto">Ver reclamos resueltos</a></div>` : ""}
