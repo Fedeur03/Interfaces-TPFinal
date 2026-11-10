@@ -753,6 +753,7 @@ input, select, textarea { font: inherit; }
 }
 .claim-map:focus-visible { outline: 3px solid var(--primary); outline-offset: -4px; }
 .claim-map.is-zoomed { cursor: grab; touch-action: none; }
+.claim-map.is-pinching { --map-duration: 220ms; }
 .claim-map.is-picker { cursor: crosshair; }
 .claim-map.is-dragging { cursor: grabbing; }
 .map-world { position: absolute; inset: 0; transform-origin: 0 0; pointer-events: none; }

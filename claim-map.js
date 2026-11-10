@@ -24,6 +24,7 @@ class ClaimMap {
     this.left = 0;
     this.top = 0;
     this.groups = [];
+    this.touchPoints = new Map();
     this.resize();
     this.stage.classList.add("is-ready");
 
@@ -323,7 +324,47 @@ class ClaimMap {
     event.preventDefault();
   }
 
+  pinchCenter(first, second) {
+    const rect = this.stage.getBoundingClientRect();
+    return {
+      x: (first.clientX + second.clientX) / 2 - rect.left,
+      y: (first.clientY + second.clientY) / 2 - rect.top,
+      distance: Math.hypot(first.clientX - second.clientX, first.clientY - second.clientY),
+    };
+  }
+
+  startPinch() {
+    const center = this.pinchCenter(...this.touchPoints.values());
+    this.pinch = {
+      ids: [...this.touchPoints.keys()],
+      distance: Math.max(1, center.distance),
+      scale: this.scale,
+      point: this.displayedPointAt(center.x, center.y),
+    };
+    this.drag = null;
+    this.dragged = true;
+    this.stage.classList.remove("is-dragging");
+    this.stage.classList.add("is-pinching");
+    this.pinch.ids.forEach((id) => this.stage.setPointerCapture(id));
+    this.closeResults();
+  }
+
+  movePinch() {
+    const touches = this.pinch.ids.map((id) => this.touchPoints.get(id));
+    const { x, y, distance } = this.pinchCenter(...touches);
+    const scale = this.pinch.scale * distance / this.pinch.distance;
+    let level = this.level;
+    while (level < MAP_ZOOM.length - 1 && scale > Math.sqrt(MAP_ZOOM[level] * MAP_ZOOM[level + 1]) * 1.04) level++;
+    while (level > 0 && scale < Math.sqrt(MAP_ZOOM[level] * MAP_ZOOM[level - 1]) / 1.04) level--;
+    if (level !== this.level) this.setZoom(level, x, y, this.pinch.point);
+  }
+
   pointerDown(event) {
+    if (event.pointerType === "touch") {
+      this.touchPoints.set(event.pointerId, event);
+      if (this.touchPoints.size === 2 && !this.pinch) this.startPinch();
+      if (this.pinch) return;
+    }
     if (!event.isPrimary || event.button !== 0) return;
     this.dragged = false;
     if (!this.level || event.target.closest("a, button, .map-group-results")) return;
@@ -331,6 +372,13 @@ class ClaimMap {
   }
 
   pointerMove(event) {
+    if (this.touchPoints.has(event.pointerId)) {
+      this.touchPoints.set(event.pointerId, event);
+      if (this.pinch) {
+        this.movePinch();
+        return;
+      }
+    }
     const drag = this.drag;
     if (!drag || drag.id !== event.pointerId) return;
     const dx = event.clientX - drag.x;
@@ -346,6 +394,12 @@ class ClaimMap {
   }
 
   pointerEnd(event) {
+    if (event.type === "lostpointercapture" && event.target !== this.stage) return;
+    this.touchPoints.delete(event.pointerId);
+    if (this.pinch?.ids.includes(event.pointerId)) {
+      this.pinch = null;
+      this.stage.classList.remove("is-pinching");
+    }
     if (this.drag?.id !== event.pointerId) return;
     this.drag = null;
     this.stage.classList.remove("is-dragging");

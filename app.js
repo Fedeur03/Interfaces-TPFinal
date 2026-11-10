@@ -259,8 +259,8 @@ const liveMaps = [];
 
 function reportMap(claims, { labels = true, pick = false, focus, cls = "" } = {}) {
   const index = mapConfigs.push({ claims, focus, pick: pick ? selectMapLocation : null }) - 1;
-  const hint = pick ? "Marcá la ubicación con un clic o con Enter en el centro del mapa."
-    : "Acercate con los botones o la rueda. Arrastrá para recorrer el mapa.";
+  const hint = pick ? "Tocá el mapa o usá Enter para marcar un punto. Usá dos dedos para cambiar el zoom."
+    : "Acercate con dos dedos, los botones o la rueda. Arrastrá para recorrer el mapa.";
   return `<div class="static-map claim-map ${cls} ${pick ? "is-picker" : ""} ${focus ? "is-zoomed" : ""}" data-claim-map="${index}" ${pick ? 'id="pickMap"' : ""} tabindex="0" role="region" aria-label="Mapa interactivo de Vicente López" aria-describedby="mapHint-${index}">
     <div class="map-world">
       <img class="static-map-img" src="${MAP_SRC}" alt="" draggable="false">
