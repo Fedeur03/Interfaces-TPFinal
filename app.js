@@ -825,32 +825,30 @@ function renderReclamo(id) {
 function renderCrear() {
   if (!state.session.logged) return authGate("Iniciá sesión para crear un reclamo", "Necesitás una cuenta vecinal para publicar, comentar y apoyar reclamos.");
   const opts = Object.entries(REPORT_CATEGORIES).map(([k, c]) => `<option value="${k}" ${k === draftCat ? "selected" : ""}>${c.label}</option>`).join("");
-  return `<section class="section"><div class="container">
-    <div class="section-head"><div><span class="eyebrow">${icon("plus", 15)} Nuevo reclamo</span>
-      <h2>Subí tu reclamo</h2><p>Contanos qué pasa y ubicá el reclamo.</p></div></div>
-    <form class="create-grid" data-form="crear">
-      <div class="panel panel-pad">
-        <div class="field"><label for="categoria">Categoría</label><select class="input" id="categoria" name="categoria" required><option value="">Seleccioná una categoría</option>${opts}</select></div>
-        <div class="field"><label for="descripcion">Descripción del problema</label><textarea class="textarea" id="descripcion" name="descripcion" required minlength="20" placeholder="Contanos el problema…"></textarea></div>
-        <div class="field"><label for="foto">Adjuntá foto o video</label>
-          <label class="upload-box" for="foto"><span class="uic">${icon("camera", 28)}</span><strong>Elegí un archivo</strong><span class="hint" id="uploadName">Imagen o video · Hasta 1,2 MB · Opcional</span><input id="foto" name="foto" type="file" accept="image/*,video/*"></label>
-        </div>
+  return `<section class="section create-claim-page"><div class="container">
+    <div class="claim-hero">
+      <div><span class="eyebrow">${icon("plus", 14)} Nuevo reclamo</span><h1>Subí tu reclamo</h1>
+      <p>Contanos qué pasa y ubicá el reclamo. Tu reporte ayuda a mejorar Vicente López.</p></div>
+      <div class="claim-hero-art" aria-hidden="true"><span class="claim-sun"></span><span class="claim-tree">♣</span><span class="claim-buildings">▥ ▥ ▥</span></div>
+    </div>
+    <form class="claim-layout" data-form="crear">
+      <div class="panel panel-pad claim-form-panel">
+        <div class="claim-steps"><div class="claim-step active"><span>1</span><b>Datos del reclamo</b></div><i></i><div class="claim-step"><span>2</span>Ubicación</div><i></i><div class="claim-step"><span>3</span>Confirmación</div></div>
+        <div class="claim-section-title"><span class="claim-section-icon">${icon("doc",22)}</span><div><h2>Datos del reclamo</h2><p>Describí el problema con la mayor claridad posible.</p></div></div>
+        <div class="field"><label for="categoria">Categoría</label><select class="input claim-input" id="categoria" name="categoria" required><option value="">Seleccioná una categoría</option>${opts}</select></div>
+        <div class="field"><div class="claim-label-row"><label for="descripcion">Descripción del problema</label><small>Obligatorio</small></div><textarea class="textarea claim-textarea" id="descripcion" name="descripcion" required minlength="20" maxlength="500" placeholder="Contanos el problema…"></textarea><div class="claim-counter"><span>Intentá ser claro y específico.</span><span id="claimCharCount">0 / 500</span></div></div>
+        <div class="field"><label for="foto">Adjuntá fotos o videos</label><label class="claim-upload" for="foto"><span class="claim-upload-icon">${icon("camera",30)}</span><strong>Elegí un archivo</strong><span class="hint" id="uploadName">Imagen o video · Hasta 1,2 MB · Opcional</span><input id="foto" name="foto" type="file" accept="image/*,video/*"></label></div>
+        <div class="claim-form-actions"><a href="#/" class="btn btn-ghost">Cancelar</a><button class="btn btn-primary" type="submit">${icon("arrow",16)} Enviar reclamo</button></div>
       </div>
-      <div class="panel panel-pad">
-        <div class="field"><h3>Ubicación del reclamo</h3>
-          <label for="draftAddress">Dirección</label>
-          <div class="address-search">
-            <input class="input" id="draftAddress" name="direccion" type="search" maxlength="140" autocomplete="off" value="${esc(draftAddress)}" placeholder="Calle y altura o tramo" aria-describedby="addressHelp addressFeedback">
-            <button type="button" class="btn btn-ghost" data-action="find-address">${icon("search", 16)} Buscar</button>
-          </div>
-          <span class="hint" id="addressHelp">Escribí calle y altura (o un rango), o marcá el lugar directamente en el mapa.</span>
-          <span class="hint address-feedback" id="addressFeedback" role="status"></span>
-          <div class="field address-choices" hidden><label for="addressMatches">Coincidencias</label><select class="input" id="addressMatches"></select></div>
-          <div class="map-card map-card-pick">${reportMap(state.claims, { pick: true, focus: draftPicked ? draftLatLng : undefined, cls: "pick-map" })}</div>
-          <p class="hint" id="draftBarrio" aria-live="polite">${draftLocationLabel()}</p>
+      <aside class="claim-side">
+        <div class="panel panel-pad claim-location-panel"><div class="claim-section-title"><span class="claim-location-icon">${icon("pin",25)}</span><div><h2>Ubicación del reclamo</h2><p>Marcá el lugar exacto en el mapa o buscá una dirección.</p></div></div>
+          <label for="draftAddress">Dirección</label><div class="address-search claim-address-search"><input class="input" id="draftAddress" name="direccion" type="search" maxlength="140" autocomplete="off" value="${esc(draftAddress)}" placeholder="Calle y altura o tramo" aria-describedby="addressHelp addressFeedback"><button type="button" class="btn btn-ghost" data-action="find-address">${icon("search",16)} Buscar</button></div>
+          <span class="hint" id="addressHelp">Buscá una dirección o marcá un punto en el mapa.</span><span class="hint address-feedback" id="addressFeedback" role="status"></span>
+          <div class="map-card map-card-pick claim-map-card">${reportMap(state.claims, { pick: true, focus: draftPicked ? draftLatLng : undefined, cls: "pick-map" })}</div>
+          <div class="claim-selected-location"><span>${icon("pin",20)}</span><div><small>Ubicación seleccionada:</small><strong id="draftBarrio" aria-live="polite">${draftLocationLabel()}</strong></div><button type="button" class="btn btn-ghost" data-action="focus-map">${icon("crosshair",15)} Modificar</button></div>
         </div>
-        <button class="btn btn-primary btn-block" type="submit">${icon("upload", 17)} Enviar reclamo</button>
-      </div>
+        <div class="panel panel-pad claim-tips"><div class="claim-tips-title"><span>☼</span><h2>Consejos para un mejor reclamo</h2></div><ul><li>Elegí la categoría que mejor represente el problema.</li><li>Sumá una descripción clara y breve.</li><li>Adjuntá una foto o video que muestre la situación.</li><li>Marcá la ubicación exacta en el mapa.</li></ul><div class="claim-tips-illustration">📷</div></div>
+      </aside>
     </form>
   </div></section>`;
 }
