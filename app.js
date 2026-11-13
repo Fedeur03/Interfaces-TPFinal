@@ -852,7 +852,6 @@ function renderCrear() {
     </form>
   </div></section>`;
 }
-
 function renderEnviado(id) {
   const c = getClaim(id);
   if (!c) return renderVerReclamos();
@@ -972,11 +971,33 @@ function renderMisReclamos() {
   const estado = getRoute().params.get("estado");
   const active = Object.hasOwn(ESTADOS, estado) ? estado : "";
   const tabs = [["", "Todos"], ["abierto", "En revisión"], ["en_proceso", "En curso"], ["resuelto", "Resueltos"]];
-  const filtered = active ? mine.filter((c) => c.estado === active) : mine;
-  return `<section class="section"><div class="container">
-    <div class="section-head"><div><h2>Mis reclamos</h2><p>Revisá el estado y las novedades de tus reportes.</p></div><a class="btn btn-primary" href="#/crear">${icon("plus", 17)} Crear reclamo</a></div>
-    <nav class="chipbar status-tabs" aria-label="Filtrar por estado">${tabs.map(([key, label]) => `<a class="chipbtn ${key === active ? "is-active" : ""}" ${key === active ? 'aria-current="page"' : ""} href="#/mis-reclamos${key ? "?estado=" + key : ""}">${label} · ${key ? mine.filter((c) => c.estado === key).length : mine.length}</a>`).join("")}</nav>
-    ${filtered.length ? `<div class="claim-list">${filtered.map((c) => claimRow(c, { status: true })).join("")}</div>` : `<div class="empty"><p>${mine.length ? "No tenés reclamos en este estado." : "Todavía no tenés reclamos."}</p>${mine.length ? "" : '<a class="btn btn-primary" href="#/crear">Crear mi primer reclamo</a>'}</div>`}
+  // Reclamos de muestra para que la pantalla no se vea vacía en la demo.
+  const demo = [
+    { id:"demo-vereda", titulo:"Vereda en mal estado", categoria:"infraestructura", direccion:"Av. Maipú 3840, Olivos", descripcion:"La vereda está hundida y con baldosas rotas, lo que dificulta el paso de peatones.", estado:"abierto", fecha:"2026-11-12", demo:true, imagen:"assets/fotos-referencia/vereda.jpg" },
+    { id:"demo-luz", titulo:"Luminaria apagada", categoria:"alumbrado", direccion:"Yrigoyen 1550, Florida", descripcion:"La farola lleva varios días sin funcionar y la cuadra queda muy oscura.", estado:"en_proceso", fecha:"2026-11-10", demo:true, imagen:"assets/fotos-referencia/alumbrado-card.webp" },
+    { id:"demo-basura", titulo:"Basura acumulada", categoria:"limpieza", direccion:"Mitre 3200, Villa Martelli", descripcion:"Hay varios días de residuos sin recolectar en la esquina.", estado:"resuelto", fecha:"2026-11-05", demo:true, imagen:"assets/fotos-referencia/limpieza-card.webp" }
+  ];
+  const records = mine.length ? mine : demo;
+  const filtered = active ? records.filter((c) => c.estado === active) : records;
+  const count = (key) => records.filter((c) => !key || c.estado === key).length;
+  const cards = filtered.map((c) => {
+    const demoCard = c.demo;
+    const category = REPORT_CATEGORIES[c.categoria]?.label || c.categoria || "Espacio público";
+    const status = ESTADOS[c.estado]?.label || (c.estado === "abierto" ? "En revisión" : c.estado === "en_proceso" ? "En curso" : "Resuelto");
+    const statusClass = c.estado === "abierto" ? "review" : c.estado === "en_proceso" ? "progress" : "done";
+    return `<article class="panel my-claim-card ${demoCard ? "demo-claim" : ""}">
+      <span class="my-claim-symbol ${statusClass}">${icon(c.estado === "resuelto" ? "check" : c.categoria === "alumbrado" ? "sun" : c.categoria === "limpieza" ? "trash" : "tools", 25)}</span>
+      ${demoCard ? `<img class="my-claim-thumb" src="${c.imagen}" alt="Imagen ilustrativa: ${esc(c.titulo)}">` : `<span class="my-claim-thumb my-claim-placeholder">${icon("image",25)}</span>`}
+      <div class="my-claim-info"><h3>${esc(c.titulo || c.descripcion || "Reclamo vecinal")}</h3><div class="my-claim-meta"><span>${esc(category)}</span><i>·</i><span>${esc(c.direccion || c.ubicacion || "Vicente López")}</span></div><p>${esc(c.descripcion || "Seguimiento del reclamo vecinal.")}</p>${demoCard ? '<small class="demo-label">Reclamo de ejemplo</small>' : ""}</div>
+      <div class="my-claim-status"><span class="claim-status-pill ${statusClass}">${icon(c.estado === "resuelto" ? "check" : c.estado === "en_proceso" ? "settings" : "clock", 14)} ${esc(status)}</span><span class="my-claim-date">${icon("calendar",15)} ${fmtDate(c.fecha)}</span></div>
+      ${demoCard ? `<span class="my-claim-arrow" aria-hidden="true">${icon("chevron-right",20)}</span>` : `<a class="my-claim-arrow" href="#/reclamo/${esc(c.id)}" aria-label="Ver ${esc(c.titulo || "reclamo")}">${icon("chevron-right",20)}</a>`}
+    </article>`;
+  }).join("");
+  return `<section class="section my-claims-page"><div class="container">
+    <header class="my-claims-hero"><div class="my-claims-hero-copy"><span class="eyebrow">${icon("file",15)} Mis reclamos</span><h1>Mis reclamos</h1><p>Revisá el estado y las novedades de tus reportes.</p></div><div class="my-claims-hero-art" aria-hidden="true"><span class="claims-hill hill-one"></span><span class="claims-hill hill-two"></span><span class="claims-building">▥ ▥ ▥</span><span class="claims-tree">♣</span></div></header>
+    <div class="my-claims-toolbar"><nav class="chipbar status-tabs" aria-label="Filtrar por estado">${tabs.map(([key,label]) => `<a class="chipbtn ${key === active ? "is-active" : ""}" ${key === active ? 'aria-current="page"' : ""} href="#/mis-reclamos${key ? "?estado=" + key : ""}">${label} (${count(key)})</a>`).join("")}</nav><a class="btn btn-primary" href="#/crear">${icon("plus",17)} Crear reclamo</a></div>
+    ${filtered.length ? `<div class="my-claims-list">${cards}</div>` : `<div class="empty"><p>No tenés reclamos en este estado.</p></div>`}
+    ${!mine.length ? '<p class="demo-note">Estos reclamos son ejemplos visuales. Cuando publiques los tuyos, aparecerán acá.</p>' : ""}
   </div></section>`;
 }
 
