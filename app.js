@@ -529,8 +529,7 @@ function updateShell(view) {
 
 function authGate(title, text, { municipal = false } = {}) {
   const next = encodeURIComponent(location.hash || "#/");
-  return `<section class="section"><div class="container"><div class="auth-wrap"><div class="auth-card center">
-    <span class="brand-mark" style="margin:0 auto 14px;width:52px;height:52px;border-radius:14px">${icon(municipal ? "lock" : "user", 26)}</span>
+  return `<section class="section"><div class="container"><div class="auth-wrap"><div class="auth-card center view-heading">
     <h1>${esc(title)}</h1><p class="sub">${esc(text)}</p>
     <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap"><a class="btn btn-primary" href="#/login?next=${next}">${municipal ? "Ingresar como administrador" : "Iniciar sesión"}</a>${municipal ? "" : `<a class="btn btn-ghost" href="#/registro?next=${next}">Crear cuenta</a>`}</div>
   </div></div></div></section>`;
@@ -652,7 +651,7 @@ function renderReclamos() {
 
   return `
     <section class="section"><div class="container">
-      <div class="section-head"><div><span class="eyebrow">${icon("search", 15)} Explorar</span><h2 style="margin-top:12px">Explorar reclamos</h2><p>Buscá por palabra, filtrá por categoría y estado, y apoyá los reclamos que te importan.</p></div><a class="btn btn-primary" href="#/crear">${icon("plus", 17)} Crear reclamo</a></div>
+      <div class="section-head"><div class="view-heading"><h1>Explorar reclamos</h1><p>Buscá por palabra, filtrá por categoría y estado, y apoyá los reclamos que te importan.</p></div><a class="btn btn-primary" href="#/crear">${icon("plus", 17)} Crear reclamo</a></div>
       <div class="explore-layout">
         <form class="filter-panel" data-form="filters">
           <h3>Aplicar filtros</h3>
@@ -721,7 +720,7 @@ function renderVerReclamos() {
   const claims = state.claims.slice().sort((a, b) => b.fecha.localeCompare(a.fecha));
   const { page, count, navigation } = claimPagination(claims, "ver-reclamos", getRoute().params);
   return `<section class="section"><div class="container">
-    <div class="section-head"><div><h2 id="claim-results" tabindex="-1">Ver reclamos</h2><p>Reclamos hechos por vecinos.</p></div>
+    <div class="section-head"><div class="view-heading"><h1 id="claim-results" tabindex="-1">Ver reclamos</h1><p>Reclamos hechos por vecinos.</p></div>
       <a class="btn btn-ghost" href="#/reclamos">${icon("search", 17)} Explorar y filtrar</a>
     </div>
     ${page.length ? `<p class="page-count" role="status">${count}</p><div class="claim-list">${page.map((c) => claimRow(c)).join("")}</div>` : `<div class="empty"><p>Todavía no hay reclamos publicados.</p><a class="btn btn-primary" href="#/crear">Crear reclamo</a></div>`}
@@ -770,7 +769,7 @@ function renderReclamo(id) {
                 </form>
               </dialog>` : ""}
             </div>
-            <h1 class="detail-title">${esc(detailTitle)}</h1>
+            <h1 class="detail-title view-title">${esc(detailTitle)}</h1>
             <div class="detail-meta">
               <span style="display:inline-flex;align-items:center;gap:6px">${icon("calendar", 16)} Publicado el ${fmtDate(c.fecha)}</span>
               <span style="display:inline-flex;align-items:center;gap:6px">${icon("pin", 16)} ${esc(c.direccion)}</span>
@@ -839,9 +838,8 @@ function renderCrear() {
   const opts = Object.entries(REPORT_CATEGORIES).map(([k, c]) => `<option value="${k}" ${k === draftCat ? "selected" : ""}>${c.label}</option>`).join("");
   return `<section class="section create-claim-page"><div class="container">
     <div class="claim-hero">
-      <div><span class="eyebrow">${icon("plus", 14)} Nuevo reclamo</span><h1>Subí tu reclamo</h1>
+      <div class="view-heading"><h1>Subí tu reclamo</h1>
       <p>Contanos qué pasa y ubicá el reclamo. Tu reporte ayuda a mejorar Vicente López.</p></div>
-      <div class="claim-hero-art" aria-hidden="true"><span class="claim-sun"></span><span class="claim-tree">♣</span><span class="claim-buildings">▥ ▥ ▥</span></div>
     </div>
     <form class="claim-layout" data-form="crear">
       <div class="panel panel-pad claim-form-panel">
@@ -880,7 +878,7 @@ function renderEnviado(id) {
         </g>
         <path class="success-burst" d="M38 1v-5 M65 10l5-5 M75 37h6 M65 64l5 5 M38 75v5 M11 64l-5 5 M1 37h-6 M11 10l-5-5" pathLength="100"/>
       </svg></div>
-      <h1>¡Reclamo enviado con éxito!</h1>
+      <h1 class="view-title">¡Reclamo enviado con éxito!</h1>
       <p class="muted" role="status">Tu reclamo ya está en el mapa y los vecinos pueden apoyarlo.</p>
       <div class="ticket"><b>N° de reclamo #${esc(c.numero)}</b><span>Fecha de envío: ${fmtDate(c.fecha)}</span></div>
       <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap"><a class="btn btn-primary" href="#/reclamo/${c.id}">${icon("doc", 17)} Ver mi reclamo</a><a class="btn btn-ghost" href="#/">Volver al inicio</a></div>
@@ -906,7 +904,7 @@ function authLink(view) {
 
 function renderRegistro() {
   return `<section class="section"><div class="container"><div class="auth-wrap register-wrap"><div class="auth-card">
-    <h1>Registrarse</h1><p class="sub">Creá tu cuenta vecinal para publicar, apoyar y seguir reclamos.</p>
+    <div class="view-heading"><h1>Registrarse</h1><p class="sub">Creá tu cuenta vecinal para publicar, apoyar y seguir reclamos.</p></div>
     <div class="register-grid">
       <form data-form="registro">
         <div class="row2">
@@ -932,7 +930,7 @@ function renderRegistro() {
 
 function renderLogin() {
   return `<section class="section"><div class="container"><div class="auth-wrap login-wrap"><div class="auth-card">
-    <h1>Inicio de sesión</h1><p class="sub">Ingresá para crear reclamos, apoyar y comentar.</p>
+    <div class="view-heading"><h1>Inicio de sesión</h1><p class="sub">Ingresá para crear reclamos, apoyar y comentar.</p></div>
     <form data-form="login">
       <div class="field"><label for="lemail">Email</label><input class="input" id="lemail" name="email" type="email" autocomplete="email" required></div>
       <div class="field"><label for="lpass">Contraseña</label><input class="input" id="lpass" name="password" type="password" autocomplete="current-password" required></div>
@@ -952,7 +950,7 @@ function renderPerfil() {
   const municipal = hasMunicipalAccess();
   const mine = state.claims.filter((c) => c.owner === account.email);
   return `<section class="section"><div class="container">
-    <div class="section-head"><div><h2>Mi cuenta</h2><p>Administrá tus datos y preferencias.</p></div></div>
+    <div class="section-head"><div class="view-heading"><h1>Mi cuenta</h1><p>Administrá tus datos y preferencias.</p></div></div>
     <div class="account-grid">
       <aside class="panel panel-pad account-summary">
         <div class="avatar-lg">${esc(initials(account.nombre))}</div>
@@ -1009,7 +1007,7 @@ function renderMisReclamos() {
     </a>`;
   }).join("");
   return `<section class="section my-claims-page"><div class="container">
-    <header class="my-claims-hero"><div class="my-claims-hero-copy"><h1>Mis reclamos</h1><p>Revisá el estado y las novedades de tus reportes.</p></div><div class="my-claims-hero-art" aria-hidden="true"><span class="claims-hill hill-one"></span><span class="claims-hill hill-two"></span><span class="claims-building">▥ ▥ ▥</span><span class="claims-tree">♣</span></div></header>
+    <header class="my-claims-hero"><div class="view-heading"><h1>Mis reclamos</h1><p>Revisá el estado y las novedades de tus reportes.</p></div></header>
     <div class="my-claims-toolbar"><nav class="chipbar status-tabs" aria-label="Filtrar por estado">${tabs.map(([key,label]) => `<a class="chipbtn ${key === active ? "is-active" : ""}" ${key === active ? 'aria-current="page"' : ""} href="#/mis-reclamos${key ? "?estado=" + key : ""}">${label} (${count(key)})</a>`).join("")}</nav><a class="btn btn-primary" href="#/crear">${icon("plus",17)} Crear reclamo</a></div>
     ${filtered.length ? `<div class="my-claims-list">${cards}</div>` : `<div class="empty"><p>${mine.length ? "No tenés reclamos en este estado." : "Todavía no tenés reclamos."}</p>${mine.length ? "" : `<a class="btn btn-primary" href="#/crear">Crear mi primer reclamo</a>`}</div>`}
   </div></section>`;
@@ -1020,7 +1018,7 @@ function renderNotificaciones() {
   const list = accountNotifications();
   const tipoIcon = { estado: "check", apoyo: "support", municipio: "building", sistema: "bell" };
   return `<section class="section"><div class="container">
-    <div class="section-head"><div><h1 class="notification-heading" id="notification-title" tabindex="-1">${icon("bell", 30)} Notificaciones</h1><p>Novedades, estados actualizados y respuestas del municipio.</p></div>
+    <div class="section-head"><div class="view-heading"><h1 id="notification-title" tabindex="-1">Notificaciones</h1><p>Novedades, estados actualizados y respuestas del municipio.</p></div>
       ${list.length ? `<div class="view-actions">${list.some((n) => !n.leida) ? '<button class="btn btn-ghost btn-sm" data-action="mark-all">Marcar todas como leídas</button>' : ""}<button class="btn btn-ghost btn-sm" data-action="delete-all-notifications">Eliminar todas</button></div>` : ""}</div>
     ${list.length ? `<ul class="notif-list">${list.map((n) => `<li class="notif-entry">
       <a class="notif-item ${n.leida ? "" : "unread"}" data-id="${esc(n.id)}" href="${n.ref ? "#/reclamo/" + esc(n.ref) : "#/"}"><span class="nic">${icon(tipoIcon[n.tipo] || "bell", 21)}</span><span class="notification-body"><span class="nt">${esc(n.titulo)}</span><span class="nd">${esc(n.texto)}</span></span><span class="nh">${fmtDate(n.fecha)}</span>${n.leida ? "" : '<span class="new-dot" aria-label="Sin leer"></span>'}</a>
@@ -1032,7 +1030,7 @@ function renderNotificaciones() {
 function renderMunicipio() {
   return `<section class="section"><div class="container muni-intro">
     <div class="muni-intro-row">
-      <div><span class="eyebrow">${icon("building", 15)} Vicente López</span><h1>Conocé tu Municipio</h1>
+      <div class="view-heading"><h1>Conocé tu Municipio</h1>
         <p>Vicente López está en el norte del Gran Buenos Aires, a orillas del Río de la Plata. Sus nueve barrios reúnen zonas residenciales, centros comerciales y espacios de encuentro como el Paseo de la Costa.</p>
         <p>El partido se creó el <strong>21 de diciembre de 1905</strong>, al separarse de San Isidro, y Olivos quedó como cabecera. Las fechas que recuerdan el origen de cada barrio quedaron reunidas en el <a href="https://www.vicentelopez.gov.ar/boletin_oficial/bulletin/uploads/historical/1533.pdf#page=14">Boletín Municipal</a>.</p>
       </div>
@@ -1120,7 +1118,7 @@ function renderMunicipal() {
   ).sort((a, b) => b.fecha.localeCompare(a.fecha));
   const selected = list.find((c) => c.id === selectedId) || list[0];
   return `<section class="section municipal-panel"><div class="container">
-    <div class="section-head municipal-heading"><div><span class="section-kicker">Municipio · Gestión de reclamos</span><h2>Panel municipal</h2><p>Revisá la cola y publicá avances para los vecinos.</p></div><a class="btn btn-ghost" href="#/municipio">Volver al municipio</a></div>
+    <div class="section-head municipal-heading"><div class="view-heading"><h1>Panel municipal</h1><p>Revisá la cola y publicá avances para los vecinos.</p></div><a class="btn btn-ghost" href="#/municipio">Volver al municipio</a></div>
     <nav class="municipal-tabs" aria-label="Colas de reclamos">${Object.entries(queues).map(([key, group]) =>
       `<a href="${esc(municipalURL(key, q))}" ${key === queue ? 'aria-current="page"' : ""}>${group.label}<strong>${group.items.length}</strong></a>`
     ).join("")}</nav>
@@ -1175,7 +1173,7 @@ function renderMapa() {
   const list = mapMatches(filter);
   const categories = [["todos", "Todos", "pin"], ...Object.entries(REPORT_CATEGORIES).map(([key, item]) => [key, item.label, item.icon])];
   return `<section class="section"><div class="container">
-    <div class="section-head"><div><span class="eyebrow">${icon("pin", 15)} Mapa</span><h2 style="margin-top:12px">Mapa de reclamos · Vicente López</h2>
+    <div class="section-head"><div class="view-heading"><h1>Mapa de reclamos · Vicente López</h1>
       <p>Acercate para separar las tarjetas y abrí un reclamo para ver el detalle.</p></div>
       <label class="stats-period">Estado <select class="input" id="mapStatus"><option value="todos">Todos los estados</option>${Object.entries(ESTADOS).map(([key, label]) => `<option value="${key}" ${key === filter.status ? "selected" : ""}>${label}</option>`).join("")}</select></label>
     </div>
@@ -1330,7 +1328,7 @@ function renderEstadisticas() {
   }
 
   return `<section class="section dashboard"><div class="container">
-    <div class="section-head dashboard-head"><div><span class="section-kicker">Vicente López · En números</span><h2>Estadísticas de reclamos</h2><p>Consultá qué se reporta, dónde y cómo avanzan los reclamos.</p></div>
+    <div class="section-head dashboard-head"><div class="view-heading"><h1>Estadísticas de reclamos</h1><p>Consultá qué se reporta, dónde y cómo avanzan los reclamos.</p></div>
       <div class="stats-filters">
         <label class="stats-period">Período <select class="input" id="statsPeriod"><option value="180">Últimos 6 meses</option><option value="30" ${period === "30" ? "selected" : ""}>Últimos 30 días</option></select></label>
         <label class="stats-period">Barrio <select class="input" id="statsBarrio"><option value="">Todos los barrios</option>${Object.keys(BARRIOS).map((label) => `<option ${label === barrio ? "selected" : ""}>${esc(label)}</option>`).join("")}</select></label>
@@ -1407,7 +1405,7 @@ function renderPeticiones() {
   const list = ordered.filter((claim) => (claim.apoyos < THRESHOLD) === pending);
   const { page, navigation } = claimPagination(list, "peticiones", params, 8);
   return `<section class="section"><div class="container">
-    <div class="section-head"><div><span class="eyebrow">${icon("users", 15)} Participación ciudadana</span><h1>Peticiones colectivas</h1>
+    <div class="section-head"><div class="view-heading"><h1>Peticiones colectivas</h1>
       <p>Con ${THRESHOLD} apoyos, un reclamo habilita una carta al área responsable de su categoría.</p></div></div>
     <nav class="chipbar petition-tabs" aria-label="Grupos de peticiones">
       <a class="btn ${pending ? "btn-ghost" : "btn-primary"}" href="#/peticiones" ${pending ? "" : 'aria-current="page"'}>Habilitadas · ${readyCount}</a>
@@ -1498,7 +1496,7 @@ function render({ deferMotion = false, fallbackTransition = false } = {}) {
     case "mapa": html = renderMapa(); break;
     case "estadisticas": html = renderEstadisticas(); break;
     case "peticiones": html = renderPeticiones(); break;
-    default: html = `<section class="section"><div class="container"><div class="empty"><p style="font-weight:700;color:var(--ink)">Página no encontrada</p><a class="btn btn-ghost" href="#/" style="margin-top:12px">Volver al inicio</a></div></div></section>`;
+    default: html = `<section class="section"><div class="container"><div class="empty"><h1 class="view-title">Página no encontrada</h1><a class="btn btn-ghost" href="#/" style="margin-top:12px">Volver al inicio</a></div></div></section>`;
   }
   const app = document.getElementById("app");
   const queueScroll = app.querySelector(".municipal-list")?.scrollTop || 0;

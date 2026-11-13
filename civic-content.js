@@ -31,7 +31,7 @@ function renderHomeNews() {
 
 function renderNovedades() {
   return `<section class="section"><div class="container">
-    <header class="civic-heading"><span class="eyebrow">Información pública</span><h1>Novedades de Vicente López</h1>
+    <header class="civic-heading view-heading"><h1>Novedades de Vicente López</h1>
       <p class="muted" id="news-source" role="status">Selección de comunicados y actividades del portal municipal.</p></header>
     <div class="civic-card-grid" id="municipal-news" data-news-view="full">${newsCards(MUNICIPAL_NEWS)}</div>
     <div class="civic-crosslink view-actions"><a class="btn btn-primary" href="${MUNICIPAL_SITE}novedades/">Últimas novedades oficiales</a>
@@ -73,7 +73,7 @@ const TERMS = [
 function renderAyuda(terminos) {
   const content = terminos ? TERMS : FAQ;
   return `<section class="section"><div class="container civic-narrow">
-    <header class="civic-heading"><span class="eyebrow">Atención vecinal</span><h1>${terminos ? "Términos y condiciones" : "Preguntas frecuentes"}</h1>
+    <header class="civic-heading view-heading"><h1>${terminos ? "Términos y condiciones" : "Preguntas frecuentes"}</h1>
     <p class="muted">${terminos ? "Condiciones de uso del prototipo AvisAR." : "Cómo publicar, acompañar y seguir un reclamo en Vicente López."}</p></header>
     <div class="panel panel-pad civic-copy">${content.map(([title, body]) => terminos
       ? `<section><h2>${title}</h2><p>${body}</p></section>`
@@ -126,7 +126,7 @@ async function updateMunicipalNews(results) {
 
 function renderContacto() {
   return `<section class="section"><div class="container civic-narrow">
-    <header class="civic-heading"><span class="eyebrow">Atención vecinal</span><h1>Contacto y soporte</h1><p class="muted">Elegí el canal según lo que necesites resolver.</p></header>
+    <header class="civic-heading view-heading"><h1>Contacto y soporte</h1><p class="muted">Elegí el canal según lo que necesites resolver.</p></header>
     <div class="civic-card-grid">
       <article class="panel panel-pad"><h2>Ayuda con AvisAR</h2><p>Consultá cómo ingresar, buscar una dirección o seguir un reclamo.</p><a class="btn btn-ghost" href="#/preguntas">Preguntas frecuentes</a></article>
       <article class="panel panel-pad"><h2>Atención municipal</h2><p>Para un reclamo real o una consulta sobre servicios, usá los canales del Municipio de Vicente López.</p><a class="btn btn-primary" href="tel:147">Llamar al 147</a> <a class="btn btn-ghost" href="${MUNICIPAL_SITE}canales-de-atencion/">Ver canales oficiales</a></article>
