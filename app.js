@@ -733,6 +733,10 @@ function renderReclamo(id) {
   if (!c) return `<section class="section"><div class="container"><div class="empty"><p style="font-weight:700;color:var(--ink)">Reclamo no encontrado</p><a class="btn btn-ghost" href="#/reclamos" style="margin-top:12px">Volver a reclamos</a></div></div></section>`;
 
   const cat = catMeta(c.categoria);
+  // Older reports use a shortened description as their title in lists.
+  const description = c.descripcion || "";
+  const generatedTitle = description.length > 64 ? description.slice(0, 61).trim() + "…" : description;
+  const detailTitle = c.titulo === generatedTitle ? description : c.titulo;
   const supported = ownSupports().includes(c.id);
   const pct = Math.min(100, Math.round((c.apoyos / THRESHOLD) * 100));
   const ready = c.apoyos >= THRESHOLD;
@@ -765,7 +769,7 @@ function renderReclamo(id) {
                 </form>
               </dialog>` : ""}
             </div>
-            <h1 class="detail-title">${esc(c.titulo)}</h1>
+            <h1 class="detail-title">${esc(detailTitle)}</h1>
             <div class="detail-meta">
               <span style="display:inline-flex;align-items:center;gap:6px">${icon("calendar", 16)} Publicado el ${fmtDate(c.fecha)}</span>
               <span style="display:inline-flex;align-items:center;gap:6px">${icon("pin", 16)} ${esc(c.direccion)}</span>
