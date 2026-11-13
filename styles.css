@@ -1282,6 +1282,7 @@
    .claim-tips-illustration{position:absolute;right:17px;bottom:14px;font-size:43px;opacity:.85}
    @media (min-width: 1051px) {
      .create-claim-page { padding-block: clamp(12px, 2dvh, 25px); }
+     .claim-identity-fields { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 12px; }
      .claim-hero { min-height: 0; margin-bottom: clamp(12px, 1.8dvh, 22px); }
      .claim-hero-art { height: clamp(76px, 10dvh, 120px); }
      .claim-form-panel, .claim-location-panel, .claim-tips { padding-block: clamp(12px, 1.9dvh, 24px); }

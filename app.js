@@ -2,6 +2,7 @@
 
 const STORE_KEY = "avisar_vl_v2";
 const THRESHOLD = 100;
+const CLAIM_TITLE_LIMIT = 48;
 const EMPTY_SESSION = { logged: false, email: "", nombre: "" };
 const SESSION_KEY = STORE_KEY + "_session";
 const ADMIN_EMAIL = "admin@avisar.test";
@@ -846,7 +847,10 @@ function renderCrear() {
       <div class="panel panel-pad claim-form-panel">
         <div class="claim-steps"><div class="claim-step"><span>1</span>Datos del reclamo</div><i></i><div class="claim-step"><span>2</span>Ubicación</div><i></i><div class="claim-step"><span>3</span>Confirmación</div></div>
         <div class="claim-section-title"><span class="claim-section-icon">${icon("doc",22)}</span><div><h2>Datos del reclamo</h2><p>Describí el problema con la mayor claridad posible.</p></div></div>
-        <div class="field"><label for="categoria">Categoría</label><select class="input claim-input" id="categoria" name="categoria" required><option value="">Seleccioná una categoría</option>${opts}</select></div>
+        <div class="claim-identity-fields">
+          <div class="field"><label for="titulo">Título del reclamo</label><input class="input claim-input" id="titulo" name="titulo" required maxlength="${CLAIM_TITLE_LIMIT}" placeholder="Ej.: Luminaria apagada"></div>
+          <div class="field"><label for="categoria">Categoría</label><select class="input claim-input" id="categoria" name="categoria" required><option value="">Seleccioná una categoría</option>${opts}</select></div>
+        </div>
         <div class="field"><div class="claim-label-row"><label for="descripcion">Descripción del problema</label><small>Obligatorio</small></div><textarea class="textarea claim-textarea" id="descripcion" name="descripcion" required minlength="20" maxlength="500" placeholder="Contanos el problema…"></textarea><div class="claim-counter"><span>Intentá ser claro y específico.</span><span id="claimCharCount">0 / 500</span></div></div>
         <div class="field"><label for="foto">Adjuntá fotos o videos</label><label class="claim-upload" for="foto"><span class="claim-upload-icon">${icon("camera",30)}</span><span class="claim-upload-copy"><strong>Elegí un archivo</strong><span class="hint" id="uploadName">Imagen o video · Hasta 1,2 MB · Opcional</span></span><input id="foto" name="foto" type="file" accept="image/*,video/*"></label></div>
         <div class="claim-form-actions"><a href="#/" class="btn btn-ghost">Cancelar</a><button class="btn btn-primary" type="submit">${icon("arrow",16)} Enviar reclamo</button></div>
@@ -1156,9 +1160,8 @@ function renderMapResults(list, params) {
   return `<p class="map-result-count" aria-live="polite">${list.length ? page.count : "Sin reclamos para estos filtros"}</p>
     <div class="map-result-list">${page.page.map((claim) => {
       const category = catMeta(claim.categoria);
-      const titleLimit = 48;
       const characters = Array.from(claim.titulo);
-      const title = characters.length > titleLimit ? characters.slice(0, titleLimit - 3).join("").trimEnd() + "..." : claim.titulo;
+      const title = characters.length > CLAIM_TITLE_LIMIT ? characters.slice(0, CLAIM_TITLE_LIMIT - 3).join("").trimEnd() + "..." : claim.titulo;
       const summary = `${claim.barrio} · ${ESTADOS[claim.estado]} · ${claim.apoyos} apoyos`;
       return `<a class="map-mini" href="#/reclamo/${esc(claim.id)}" style="--c:${category.color}" aria-label="${esc(claim.titulo + " · " + summary)}">
         <span class="ic">${icon(category.icon, 20)}</span><span class="map-mini-copy"><span class="t">${esc(title)}</span>
@@ -1960,6 +1963,12 @@ document.addEventListener("submit", async (e) => {
     const data = new FormData(form);
     const categoria = data.get("categoria");
     if (!Object.hasOwn(REPORT_CATEGORIES, categoria)) { toast("Elegí una categoría."); return; }
+    const titulo = String(data.get("titulo") || "").trim();
+    if (!titulo || titulo.length > CLAIM_TITLE_LIMIT) {
+      toast(`Escribí un título de hasta ${CLAIM_TITLE_LIMIT} caracteres.`);
+      form.elements.titulo.focus();
+      return;
+    }
     const descripcion = String(data.get("descripcion") || "").trim();
     if (descripcion.length < 20) { toast("La descripción debe tener al menos 20 caracteres."); return; }
     if (!draftPicked || String(data.get("direccion") || "").trim() !== draftAddress) {
@@ -1986,7 +1995,7 @@ document.addEventListener("submit", async (e) => {
       const claim = {
         id,
         numero: "F-" + (15300 + Math.floor(Math.random() * 700)),
-        titulo: descripcion.length > 64 ? descripcion.slice(0, 61).trim() + "…" : descripcion,
+        titulo,
         categoria, barrio, direccion,
         descripcion, fecha: new Date().toISOString().slice(0, 10), apoyos: 0, estado: "abierto",
         verificado: false, evidencia: "", foto, owner, comentarios: [],
