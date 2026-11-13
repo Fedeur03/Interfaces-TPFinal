@@ -33,7 +33,7 @@ Después entrá a `http://localhost:8123`. Usar el mismo navegador y dirección 
 
 - HTML, CSS y JavaScript sin compilación. `app.js` contiene el enrutador y el estado, `claim-map.js` gestiona el mapa y `civic-content.js` reúne el contenido institucional.
 - Se cargan 40 reclamos iniciales y 56 iniciativas adicionales repartidas en ocho barrios. Hay 50 iniciativas nuevas que superan los 100 apoyos y seis que todavía se acercan a la meta. Las nuevas iniciativas se incorporan también al almacenamiento previo, conservando los cambios de los reclamos existentes.
-- Cada cuenta puede apoyar un reclamo una vez. Con 100 apoyos se habilita una carta pública que se puede copiar desde Peticiones.
+- Cada cuenta puede apoyar un reclamo una vez. Con 100 apoyos se habilita una carta al área responsable. Desde Peticiones se puede leer, copiar y registrar su envío de prueba. AvisAR guarda el estado «Enviada» y una copia de la carta en el navegador.
 - El mapa base de OpenStreetMap y las fotos se sirven como archivos locales. Los filtros actualizan marcadores y resultados sin reconstruir el mapa. La búsqueda escrita de direcciones necesita conexión a OpenStreetMap Nominatim.
 - Los reclamos, apoyos, perfiles y notificaciones se guardan en `localStorage` con la clave `avisar_vl_v2`. En el login, sin **Mantener sesión**, el acceso dura lo que dure la pestaña. Al marcarlo, el acceso persiste en el navegador.
 - El inicio de sesión y los accesos de Google, Facebook y Apple se simulan localmente. Usá datos ficticios al probarlos.

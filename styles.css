@@ -1069,6 +1069,16 @@
    }
    .is-chart-visible .stacked-segment { animation: segment-in var(--segment-duration) linear var(--segment-delay) both; }
    @keyframes draw-in { from { stroke-dashoffset: 100; } to { stroke-dashoffset: 0; } }
+   .letter-send-status:not(:empty) {
+     display: flex; align-items: center; gap: 10px; margin-top: 12px;
+     padding: 10px 12px; border-radius: 10px; background: #edf7ef; color: #215f3a;
+   }
+   .letter-send-status svg { flex: none; }
+   .letter-send-status path { stroke-dasharray: 100; animation: draw-in .45s ease-out both; }
+   [data-action="send-letter"][aria-disabled="true"] { cursor: default; background: #edf7ef; color: #215f3a; box-shadow: none; }
+   @media (prefers-reduced-motion: reduce) {
+     .letter-send-status path { animation: none; }
+   }
    @keyframes chart-arc-in { from { stroke-dasharray: 0 100; } to { stroke-dasharray: var(--arc-share) 100; } }
    @keyframes donut-count-pop {
      0% { opacity: 0; transform: scale(.76); }

@@ -1358,10 +1358,25 @@ function renderEstadisticas() {
   </div></section>`;
 }
 
+const PETITION_AREAS = {
+  seguridad: "Área de Seguridad",
+  infraestructura: "Área de Obras Públicas",
+  alumbrado: "Área de Alumbrado Público",
+  espacios_verdes: "Área de Espacios Verdes",
+  desagues: "Área de Desagües",
+  transito: "Área de Tránsito y Señalización",
+  limpieza: "Área de Limpieza Urbana",
+};
+
+function petitionArea(c) {
+  return c.peticionEnviada?.area || PETITION_AREAS[c.categoria] || "Área de Atención Vecinal";
+}
+
 function letterText(c) {
+  if (c.peticionEnviada) return c.peticionEnviada.texto;
   return `Vicente López, ${fmtDate(new Date().toISOString().slice(0, 10))}
 
-Sr./Sra. Intendente/a del Municipio de Vicente López:
+Al equipo de ${petitionArea(c)} del Municipio de Vicente López
 
 Los vecinos y las vecinas abajo firmantes, usuarios de la plataforma AvisAR, solicitamos una respuesta formal y una intervención respecto del siguiente reclamo comunitario:
 
@@ -1393,7 +1408,7 @@ function renderPeticiones() {
   const { page, navigation } = claimPagination(list, "peticiones", params, 8);
   return `<section class="section"><div class="container">
     <div class="section-head"><div><span class="eyebrow">${icon("users", 15)} Participación ciudadana</span><h1>Peticiones colectivas</h1>
-      <p>Con ${THRESHOLD} apoyos, un reclamo habilita una carta pública dirigida al Municipio.</p></div></div>
+      <p>Con ${THRESHOLD} apoyos, un reclamo habilita una carta al área responsable de su categoría.</p></div></div>
     <nav class="chipbar petition-tabs" aria-label="Grupos de peticiones">
       <a class="btn ${pending ? "btn-ghost" : "btn-primary"}" href="#/peticiones" ${pending ? "" : 'aria-current="page"'}>Habilitadas · ${readyCount}</a>
       <a class="btn ${pending ? "btn-primary" : "btn-ghost"}" href="#/peticiones?grupo=en-camino" ${pending ? 'aria-current="page"' : ""}>En camino · ${ordered.length - readyCount}</a>
@@ -1404,6 +1419,7 @@ function renderPeticiones() {
         return `<article class="petition-card ${pending ? "" : "ready"}"><div>
           <div class="petition-badges">${catChip(claim.categoria)}${statusBadge(claim.estado)}</div>
           <h3>${esc(claim.titulo)}</h3><p class="muted">${esc(claim.barrio)} · ${esc(claim.direccion)}</p>
+          ${pending ? "" : `<p class="muted">${claim.peticionEnviada ? '<span class="badge badge-verified">Enviada</span> a' : "Destinatario"} ${esc(petitionArea(claim))}</p>`}
           <div class="pbar" style="--c:${CATEGORY_COLOR}"><div class="progress"><i style="width:${pct}%"></i></div>
           <div class="pmeta"><span>${claim.apoyos} apoyos</span><span>${pending ? "Faltan " + (THRESHOLD - claim.apoyos) : "Meta alcanzada"}</span></div></div></div>
           <div class="petition-actions">${pending ? "" : `<button class="btn btn-primary btn-sm" data-action="letter" data-id="${esc(claim.id)}">${icon("doc", 16)} Ver carta</button>`}
@@ -1665,17 +1681,48 @@ function deleteOwnClaim(id, dialog) {
 
 function openLetter(id) {
   const c = getClaim(id);
-  if (!c) return;
+  if (!c || c.apoyos < THRESHOLD) return;
   const backdrop = document.createElement("div");
   backdrop.className = "modal-backdrop";
   backdrop.innerHTML = `<div class="modal" role="dialog" aria-modal="true" aria-labelledby="letterTitle">
-    <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start"><div><h3 id="letterTitle">Carta pública</h3><p class="muted" style="margin:0 0 14px;font-size:.86rem">Petición colectiva · ${esc(c.barrio)}</p></div><button class="btn btn-ghost btn-sm" data-action="close-modal" aria-label="Cerrar">${icon("close", 16)}</button></div>
+    <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start"><div><h3 id="letterTitle">Carta al área responsable</h3><p class="muted" style="margin:0 0 14px;font-size:.86rem">${c.peticionEnviada ? "Enviada a " + esc(petitionArea(c)) + " · " + fmtDate(c.peticionEnviada.fecha) : esc(petitionArea(c))}</p></div><button class="btn btn-ghost btn-sm" data-action="close-modal" aria-label="Cerrar">${icon("close", 16)}</button></div>
     <div class="letter">${esc(letterText(c))}</div>
-    <div style="display:flex;gap:10px;margin-top:16px;flex-wrap:wrap"><button class="btn btn-primary btn-sm" data-action="copy-letter" data-id="${c.id}">${icon("doc", 16)} Copiar carta</button></div>
+    <div style="display:flex;gap:10px;margin-top:16px;flex-wrap:wrap"><button class="btn btn-ghost btn-sm" data-action="copy-letter" data-id="${esc(c.id)}">${icon("doc", 16)} Copiar carta</button>
+    ${c.peticionEnviada ? "" : `<button class="btn btn-primary btn-sm" data-action="send-letter" data-id="${esc(c.id)}">Enviar al área</button>`}</div>
+    <div class="letter-send-status" role="status"></div>
+    <p class="hint">El envío se registra en AvisAR como parte de la demostración.</p>
   </div>`;
   document.body.appendChild(backdrop);
   requestAnimationFrame(() => backdrop.classList.add("show"));
   backdrop.addEventListener("click", (e) => { if (e.target === backdrop) closeModal(backdrop); });
+}
+
+function sendPetition(id, backdrop) {
+  const claim = getClaim(id);
+  if (!claim || claim.apoyos < THRESHOLD || claim.peticionEnviada) return;
+  if (!requireLogin(location.hash)) {
+    closeModal(backdrop);
+    return;
+  }
+  claim.peticionEnviada = {
+    area: petitionArea(claim),
+    fecha: new Date().toISOString().slice(0, 10),
+    texto: letterText(claim),
+  };
+  try {
+    persist();
+  } catch {
+    delete claim.peticionEnviada;
+    toast("No se pudo guardar el envío.");
+    return;
+  }
+  const button = backdrop.querySelector('[data-action="send-letter"]');
+  button.setAttribute("aria-disabled", "true");
+  button.textContent = "Enviada";
+  const status = backdrop.querySelector(".letter-send-status");
+  status.innerHTML = `<svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m4 12 5 5L20 6" pathLength="100"/></svg>
+    <span><strong>Carta enviada</strong><br>Destinatario: ${esc(claim.peticionEnviada.area)} · ${fmtDate(claim.peticionEnviada.fecha)}</span>`;
+  render();
 }
 
 function closeModal(el) { const b = el.closest(".modal-backdrop") || el; b.classList.remove("show"); setTimeout(() => b.remove(), 200); }
@@ -1858,6 +1905,8 @@ document.addEventListener("click", (e) => {
   if (supportBtn) { supportClaim(supportBtn.dataset.id); return; }
   const letterBtn = t.closest('[data-action="letter"]');
   if (letterBtn) { openLetter(letterBtn.dataset.id); return; }
+  const sendLetter = t.closest('[data-action="send-letter"]');
+  if (sendLetter) { sendPetition(sendLetter.dataset.id, sendLetter.closest(".modal-backdrop")); return; }
   const copyBtn = t.closest('[data-action="copy-letter"]');
   if (copyBtn) { const c = getClaim(copyBtn.dataset.id); if (c) copyText(letterText(c)); return; }
   if (t.closest('[data-action="close-modal"]')) { closeModal(t); return; }
