@@ -1230,9 +1230,12 @@
    .claim-label-row{display:flex;align-items:center;justify-content:space-between}
    .claim-label-row small{font-size:.68rem;color:#9aa59e}
    .claim-counter{display:flex;justify-content:space-between;font-size:.68rem;color:#89958e;margin-top:5px}
-   .claim-upload{min-height:125px;border:1.5px dashed #91c8ad;border-radius:13px;background:#f4faf6;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;cursor:pointer;color:#53665c;padding:15px;text-align:center}
+   .claim-upload{min-height:125px;border:1.5px dashed #91c8ad;border-radius:13px;background:#f4faf6;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:7px;cursor:pointer;color:#53665c;padding:18px;text-align:center}
    .claim-upload input{position:absolute;opacity:0;width:1px;height:1px}
-   .claim-upload-icon{color:#168254}.claim-upload strong{font-size:.8rem}.claim-upload .hint{font-size:.68rem}
+   .claim-upload-icon{color:#168254;display:flex;align-items:center;justify-content:center}
+   .claim-upload-copy{display:flex;flex-direction:column;align-items:center;gap:4px;max-width:100%;min-width:0}
+   .claim-upload strong{font-size:.85rem;line-height:1.25;color:#293a32}
+   .claim-upload .hint{font-size:.72rem;line-height:1.4;max-width:28rem;overflow-wrap:anywhere}
    .claim-form-actions{display:flex;justify-content:space-between;align-items:center;margin-top:22px}
    .claim-form-actions .btn{padding:11px 19px}
    .claim-side{display:grid;gap:16px}
@@ -1294,4 +1297,3 @@
    .my-claims-hero h1 { color: #176b50 !important; }
    .my-claims-hero .eyebrow { color: #176b50 !important; }
    .my-claims-hero .eyebrow { background: #c3e2d3 !important; }
-   
