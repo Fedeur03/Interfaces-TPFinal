@@ -1564,9 +1564,19 @@ document.addEventListener("touchstart", (event) => {
   if (!mobileSidenav.matches || event.touches.length !== 1) return;
   const open = document.body.classList.contains("sidenav-open");
   const { clientX, clientY } = event.touches[0];
-  if (open ? !event.target.closest("#sidenav") : !event.target.closest(".sidenav-swipe")) return;
+  if (open ? !event.target.closest("#sidenav") : clientX > 44 || event.target.closest(".topbar, .claim-map")) return;
   sidenavTouch = { x: clientX, y: clientY, open };
 }, { passive: true });
+
+document.addEventListener("touchmove", (event) => {
+  if (!sidenavTouch || sidenavTouch.open || !event.cancelable) return;
+  const { x, y } = sidenavTouch;
+  const { clientX, clientY } = event.touches[0];
+  const dx = clientX - x;
+  const dy = Math.abs(clientY - y);
+  if (dy > 12 && dy >= Math.abs(dx)) sidenavTouch = null;
+  else if (dx >= 12 && dx > dy * 1.5) event.preventDefault();
+}, { passive: false });
 
 document.addEventListener("touchend", (event) => {
   if (!sidenavTouch) return;

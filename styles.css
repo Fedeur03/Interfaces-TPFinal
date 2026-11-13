@@ -1061,10 +1061,20 @@
    .is-chart-visible [data-status-slice] { animation: chart-arc-in var(--arc-duration) linear var(--arc-delay) both; }
    .is-chart-visible .chart-bar { animation: grow-in 1.15s cubic-bezier(.34,.05,.38,1) var(--chart-delay) both; }
    .is-chart-visible .chart-value { animation: gentle-in .24s ease-out var(--value-delay) both; }
-   .is-chart-visible .donut-count { animation: gentle-in .38s ease-out 1.45s both; }
+   .is-chart-visible .donut-count {
+     transform-box: fill-box;
+     transform-origin: center;
+     animation: donut-count-pop .48s ease-out 1.45s both;
+   }
    .is-chart-visible .stacked-segment { animation: segment-in var(--segment-duration) linear var(--segment-delay) both; }
    @keyframes draw-in { from { stroke-dashoffset: 100; } to { stroke-dashoffset: 0; } }
    @keyframes chart-arc-in { from { stroke-dasharray: 0 100; } to { stroke-dasharray: var(--arc-share) 100; } }
+   @keyframes donut-count-pop {
+     0% { opacity: 0; transform: scale(.76); }
+     48% { opacity: 1; transform: scale(1.18); }
+     74% { transform: scale(.97); }
+     100% { opacity: 1; transform: scale(1); }
+   }
    @keyframes chart-point-in {
      0% { opacity: 0; transform: scale(.55); stroke-opacity: .42; stroke-width: 5; }
      55% { opacity: 1; transform: scale(1.3); stroke-opacity: .18; stroke-width: 4; }
@@ -1117,6 +1127,7 @@
      ::view-transition-old(avisar-page) { animation: gentle-out .12s ease-in both; }
      .chart-panel.is-chart-visible::after { animation: none; }
      .is-chart-visible .trend-point { animation: gentle-in .23s ease-out var(--point-delay) both; }
+     .is-chart-visible .donut-count { animation: gentle-in .38s ease-out 1.45s both; }
      .is-success-playing :is(.success-drawing, .success-burst) { animation: none; }
      .btn, .claim-row, .claim-card, .cat-card, .page-link, .chart-toggle, [data-chart-series], [data-status-slice] { transition: none; }
    }
