@@ -554,8 +554,9 @@
    .chipbtn[aria-pressed="true"] { color: var(--primary); background: var(--primary-soft); border-color: var(--primary); }
    .map-side { min-width: 0; padding: 14px; border: 1px solid var(--line); border-radius: var(--radius); background: #fff; }
    .map-result-count { margin: 0; color: var(--muted); font-size: .84rem; }
-   .map-result-list { display: grid; align-content: start; gap: 7px; min-height: 315px; }
+   .map-result-list { display: grid; grid-template-columns: minmax(0, 1fr); align-content: start; gap: 7px; min-height: 315px; }
    .map-side .map-mini { padding: 7px; }
+   .map-mini-copy { min-width: 0; overflow-wrap: anywhere; }
    .map-side .map-mini .t { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
    .map-side .claim-pagination { margin-top: auto; display: grid; grid-template-columns: 1fr auto 1fr; gap: 4px; }
    .map-side .page-step { padding-inline: 4px; font-size: .77rem; }

@@ -1152,9 +1152,13 @@ function renderMapResults(list, params) {
   return `<p class="map-result-count" aria-live="polite">${list.length ? page.count : "Sin reclamos para estos filtros"}</p>
     <div class="map-result-list">${page.page.map((claim) => {
       const category = catMeta(claim.categoria);
-      return `<a class="map-mini" href="#/reclamo/${esc(claim.id)}" style="--c:${category.color}">
-        <span class="ic">${icon(category.icon, 20)}</span><span><span class="t">${esc(claim.titulo)}</span>
-        <span class="s">${esc(claim.barrio)} · ${ESTADOS[claim.estado]} · ${claim.apoyos} apoyos</span></span></a>`;
+      const titleLimit = 48;
+      const characters = Array.from(claim.titulo);
+      const title = characters.length > titleLimit ? characters.slice(0, titleLimit - 3).join("").trimEnd() + "..." : claim.titulo;
+      const summary = `${claim.barrio} · ${ESTADOS[claim.estado]} · ${claim.apoyos} apoyos`;
+      return `<a class="map-mini" href="#/reclamo/${esc(claim.id)}" style="--c:${category.color}" aria-label="${esc(claim.titulo + " · " + summary)}">
+        <span class="ic">${icon(category.icon, 20)}</span><span class="map-mini-copy"><span class="t">${esc(title)}</span>
+        <span class="s">${esc(summary)}</span></span></a>`;
     }).join("")}</div>${page.navigation}`;
 }
 

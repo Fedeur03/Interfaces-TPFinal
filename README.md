@@ -50,6 +50,18 @@ Después entrá a `http://localhost:8123`. Usar el mismo navegador y dirección 
 
 ## Créditos de las fotos de referencia
 
+Las nuevas fotos de archivo se redimensionaron y convirtieron a WebP para el mapa, las tarjetas y el detalle.
+
+- [Bache en la calzada](https://commons.wikimedia.org/wiki/File:Pothole_in_the_street.jpg) · State Farm · [CC BY 2.0](https://creativecommons.org/licenses/by/2.0/)
+- [Vereda deteriorada en Montevideo](https://commons.wikimedia.org/wiki/File:Damaged_sidewalk_in_Montevideo_-_01.jpg) · NaBUru38 · [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/)
+- [Poste de alumbrado caído](https://commons.wikimedia.org/wiki/File:A_fallen_street_light_pole.jpg) · Niera · [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/)
+- [Tacho desbordado](https://commons.wikimedia.org/wiki/File:Overflowing_garbage.jpg) · Microrao · [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/)
+- [Ramas caídas sobre un sendero](https://commons.wikimedia.org/wiki/File:Storm_Damage_-_geograph.org.uk_-_755531.jpg) · John Sparshatt · [CC BY-SA 2.0](https://creativecommons.org/licenses/by-sa/2.0/)
+- [Desborde de una cuneta](https://commons.wikimedia.org/wiki/File:Street_Drainage_Channel_Overflow.jpg) · Paul The Writer · [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/)
+- [Senda peatonal despintada](https://commons.wikimedia.org/wiki/File:Fading_road_crossing_in_Park_View_Road_N17.jpg) · Alan Stanton · [CC BY-SA 2.0](https://creativecommons.org/licenses/by-sa/2.0/)
+- [Cerco roto](https://commons.wikimedia.org/wiki/File:Fallen_tree%2C_broken_fence.jpg) · Packer1028 · [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/)
+- [Banco de plaza deteriorado](https://commons.wikimedia.org/wiki/File:Broken_bench_at_Neil_Gows_Oak_(geograph_2897831).jpg) · Rob Burke · [CC BY-SA 2.0](https://creativecommons.org/licenses/by-sa/2.0/)
+
 - [Pothole in an asphalt pavement.jpg](https://commons.wikimedia.org/wiki/File:Pothole_in_an_asphalt_pavement.jpg) · Frankie Fouganthin · [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/)
 - [Damaged footpath in India.jpg](https://commons.wikimedia.org/wiki/File:Damaged_footpath_in_India.jpg) · Vendor on Robolow Universe · [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)
 - [Small HPS street lamp.jpg](https://commons.wikimedia.org/wiki/File:Small_HPS_street_lamp.jpg) · Bidgee · [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/)

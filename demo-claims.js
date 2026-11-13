@@ -9,16 +9,48 @@ const REFERENCE_PHOTOS = {
   seguridad: { label: "Cerco dañado", author: "Anne Burgess", source: "https://commons.wikimedia.org/wiki/File:Damaged_Fence_-_geograph.org.uk_-_1803886.jpg", license: "CC BY-SA 2.0", licenseUrl: "https://creativecommons.org/licenses/by-sa/2.0/" },
   otro: { label: "Banco de plaza roto", author: "Tomwsulcer", source: "https://commons.wikimedia.org/wiki/File:Broken_bench_Briant_Pond_Park_Summit_NJ_2009.jpg", license: "Dominio público", licenseUrl: "https://commons.wikimedia.org/wiki/File:Broken_bench_Briant_Pond_Park_Summit_NJ_2009.jpg" },
   canilla: { label: "Canilla con pérdida de agua", author: "Angelsharum", source: "https://commons.wikimedia.org/wiki/File:Dripping_Faucet.JPG", license: "CC BY-SA 3.0", licenseUrl: "https://creativecommons.org/licenses/by-sa/3.0/" },
+  "bache-2": {label: "Bache en la calzada",author: "State Farm",source: "https://commons.wikimedia.org/wiki/File:Pothole_in_the_street.jpg",license: "CC BY 2.0",licenseUrl: "https://creativecommons.org/licenses/by/2.0/"},
+  "vereda-2": {label: "Vereda deteriorada en Montevideo",author: "NaBUru38",source: "https://commons.wikimedia.org/wiki/File:Damaged_sidewalk_in_Montevideo_-_01.jpg",license: "CC BY-SA 4.0",licenseUrl: "https://creativecommons.org/licenses/by-sa/4.0/"},
+  "alumbrado-2": {label: "Poste de alumbrado caído",author: "Niera",source: "https://commons.wikimedia.org/wiki/File:A_fallen_street_light_pole.jpg",license: "CC BY-SA 4.0",licenseUrl: "https://creativecommons.org/licenses/by-sa/4.0/"},
+  "limpieza-2": {label: "Tacho desbordado",author: "Microrao",source: "https://commons.wikimedia.org/wiki/File:Overflowing_garbage.jpg",license: "CC BY-SA 4.0",licenseUrl: "https://creativecommons.org/licenses/by-sa/4.0/"},
+  "ramas-2": {label: "Ramas caídas sobre un sendero",author: "John Sparshatt",source: "https://commons.wikimedia.org/wiki/File:Storm_Damage_-_geograph.org.uk_-_755531.jpg",license: "CC BY-SA 2.0",licenseUrl: "https://creativecommons.org/licenses/by-sa/2.0/"},
+  "desagues-2": {label: "Desborde de una cuneta",author: "Paul The Writer",source: "https://commons.wikimedia.org/wiki/File:Street_Drainage_Channel_Overflow.jpg",license: "CC0 1.0",licenseUrl: "https://creativecommons.org/publicdomain/zero/1.0/"},
+  "transito-2": {label: "Senda peatonal despintada",author: "Alan Stanton",source: "https://commons.wikimedia.org/wiki/File:Fading_road_crossing_in_Park_View_Road_N17.jpg",license: "CC BY-SA 2.0",licenseUrl: "https://creativecommons.org/licenses/by-sa/2.0/"},
+  "seguridad-2": {label: "Cerco roto",author: "Packer1028",source: "https://commons.wikimedia.org/wiki/File:Fallen_tree%2C_broken_fence.jpg",license: "CC0 1.0",licenseUrl: "https://creativecommons.org/publicdomain/zero/1.0/"},
+  "otro-2": {label: "Banco de plaza deteriorado",author: "Rob Burke",source: "https://commons.wikimedia.org/wiki/File:Broken_bench_at_Neil_Gows_Oak_(geograph_2897831).jpg",license: "CC BY-SA 2.0",licenseUrl: "https://creativecommons.org/licenses/by-sa/2.0/"},
+};
+
+const REFERENCE_VARIANTS = {
+  bache: ["bache", "bache-2"],
+  vereda: ["vereda", "vereda-2"],
+  alumbrado: ["alumbrado", "alumbrado-2"],
+  limpieza: ["limpieza", "limpieza-2"],
+  ramas: ["ramas", "ramas-2"],
+  desagues: ["desagues", "desagues-2"],
+  transito: ["transito", "transito-2"],
+  seguridad: ["seguridad", "seguridad-2"],
+  otro: ["otro", "otro-2"],
 };
 
 function referencePhoto(claim, variant = "") {
   if (claim.foto && !claim.demo) return null;
   const key = claim.categoria === "infraestructura" ? (/vereda|cordón roto/i.test(claim.titulo) ? "vereda" : "bache")
+    : claim.categoria === "espacios_verdes" && /bancos?/i.test(claim.titulo) ? "otro"
     : claim.categoria === "espacios_verdes" || /restos de poda/i.test(claim.titulo) ? "ramas"
     : claim.categoria === "otro" && /canilla/i.test(claim.titulo) ? "canilla"
     : claim.categoria;
-  const photo = REFERENCE_PHOTOS[key];
-  return photo ? { ...photo, src: "assets/fotos-referencia/" + key + (variant ? "-" + variant : "") + ".webp" } : null;
+  const choices = REFERENCE_VARIANTS[key];
+  let photoKey = key;
+  if (choices) {
+    // Keep the same photo for the claim's marker, card and detail.
+    let hash = 0;
+    for (const character of String(claim.id || claim.titulo)) {
+      hash = Math.imul(hash ^ character.codePointAt(0), 16777619);
+    }
+    photoKey = choices[(hash >>> 0) % choices.length];
+  }
+  const photo = REFERENCE_PHOTOS[photoKey];
+  return photo ? { ...photo, src: "assets/fotos-referencia/" + photoKey + (variant ? "-" + variant : "") + ".webp" } : null;
 }
 
 function claimPhoto(claim, variant) {
