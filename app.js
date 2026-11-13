@@ -27,7 +27,8 @@ const REPORT_CATEGORIES = {
   otro: { label: "Otro", color: CATEGORY_COLOR, icon: "pin" },
 };
 
-const ESTADOS = { abierto: "Abierto", en_proceso: "En proceso", resuelto: "Resuelto" };
+const ESTADOS = { abierto: "En revisión", en_proceso: "En curso", resuelto: "Resuelto" };
+const ESTADO_DESC = { abierto: "El reclamo fue recibido y está pendiente de inspección municipal.", en_proceso: "El municipio está interviniendo en el lugar.", resuelto: "La intervención finalizó y quedó registrada." };
 
 const ICONS = {
   seguridad: '<path d="M12 3l7 3v5c0 5-3.5 8.5-7 10-3.5-1.5-7-5-7-10V6l7-3z"/><path d="M9.5 11.5l1.8 1.8 3.4-3.6"/>',
@@ -46,6 +47,7 @@ const ICONS = {
   plus: '<path d="M12 5v14"/><path d="M5 12h14"/>',
   search: '<circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/>',
   arrow: '<path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/>',
+  chevron: '<path d="M9 6l6 6-6 6"/>',
   doc: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8"/><path d="M8 17h5"/>',
   building: '<path d="M3 21h18"/><path d="M5 21V5a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v16"/><path d="M15 21V9h2a2 2 0 0 1 2 2v10"/><path d="M9 7h2"/><path d="M9 11h2"/><path d="M9 15h2"/>',
   users: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 21a6.5 6.5 0 0 1 13 0"/><path d="M17 5.5a3 3 0 0 1 0 5.8"/><path d="M19 21a6.5 6.5 0 0 0-3.5-5.8"/>',
@@ -305,9 +307,12 @@ function setDraftLocation({ lat, lng }, address = "", barrio = nearestBarrio(lat
   draftLatLng = { lat, lng };
   draftBarrio = barrio;
   draftPicked = true;
-  draftAddress = address;
-  document.getElementById("draftAddress").value = address;
-  document.getElementById("draftBarrio").innerHTML = draftLocationLabel();
+  const resolvedAddress = address || `${barrio} · ${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+  draftAddress = resolvedAddress;
+  const input = document.getElementById("draftAddress");
+  if (input) input.value = resolvedAddress;
+  const label = document.getElementById("draftBarrio");
+  if (label) label.innerHTML = draftLocationLabel();
 }
 
 function cancelAddressSearch() {
@@ -321,10 +326,13 @@ function clearAddressResults() {
   if (!search) return;
   search.disabled = false;
   const matches = document.getElementById("addressMatches");
-  matches.onchange = null;
-  matches.replaceChildren();
-  matches.parentElement.hidden = true;
-  document.getElementById("addressFeedback").textContent = "";
+  if (matches) {
+    matches.onchange = null;
+    matches.replaceChildren();
+    if (matches.parentElement) matches.parentElement.hidden = true;
+  }
+  const feedback = document.getElementById("addressFeedback");
+  if (feedback) feedback.textContent = "";
 }
 
 function selectMapLocation(location) {
@@ -650,8 +658,8 @@ function renderReclamos() {
           <div class="field"><label for="fcat">Categoría</label><select class="select" id="fcat" name="cat"><option value="todos">Todas las categorías</option>${catOpts}</select></div>
           <div class="field"><label for="festado">Estado</label><select class="select" id="festado" name="estado">
             <option value="todos" ${estado === "todos" ? "selected" : ""}>Todos</option>
-            <option value="abierto" ${estado === "abierto" ? "selected" : ""}>Abierto</option>
-            <option value="en_proceso" ${estado === "en_proceso" ? "selected" : ""}>En proceso</option>
+            <option value="abierto" ${estado === "abierto" ? "selected" : ""}>En revisión</option>
+            <option value="en_proceso" ${estado === "en_proceso" ? "selected" : ""}>En curso</option>
             <option value="resuelto" ${estado === "resuelto" ? "selected" : ""}>Resuelto</option>
           </select></div>
           <div class="field"><label for="fq">Palabra clave</label><input class="input" id="fq" name="q" type="search" value="${esc(params.get("q") || "")}" placeholder="Ej.: bache, luminaria…" /></div>
@@ -733,7 +741,6 @@ function renderReclamo(id) {
   const media = photo?.startsWith("data:video/")
     ? `<video class="media-img" src="${esc(photo)}" controls preload="metadata" aria-label="Video del reclamo"></video>`
     : photo ? `<img class="media-img" src="${esc(photo)}" alt="${esc(reference?.label || "Foto del reclamo")}">` : icon(cat.icon, 64, 1.6);
-  const credit = reference ? `<p class="reference-credit">Imagen de archivo · <a href="${reference.source}">${esc(reference.author)}</a> · <a href="${reference.licenseUrl}">${reference.license}</a></p>` : "";
   const news = c.comentarios.filter((m) => m.muni).slice(-3).reverse();
   const comments = c.comentarios.length ? c.comentarios.map((m) => `
     <div class="comment"><div class="avatar ${m.muni ? "muni" : ""}">${m.muni ? icon("building", 18) : esc((m.autor || "V").slice(0, 1).toUpperCase())}</div>
@@ -765,7 +772,7 @@ function renderReclamo(id) {
               <span style="display:inline-flex;align-items:center;gap:6px">${icon("doc", 16)} N° ${esc(c.numero || "")}</span>
             </div>
             <div class="claim-detail-intro">
-              <div><div class="media-frame" style="--c:${cat.color}">${media}</div>${credit}</div>
+              <div><div class="media-frame" style="--c:${cat.color}">${media}</div></div>
               <div><h2>Descripción</h2><p class="detail-desc">${esc(c.descripcion)}</p>
                 <div class="support-box">
                   <div class="big">${c.apoyos}</div><div class="lbl">apoyos de vecinos</div>
@@ -779,7 +786,7 @@ function renderReclamo(id) {
             <h3 style="margin:0 0 14px;font-size:1rem">Estado del problema</h3>
             <div class="state-compare">
               <div class="state-box"><div class="st-label">Estado reportado</div><div class="st-value">${icon("users", 17)} Reportado por vecinos</div><p>Publicado el ${fmtDate(c.fecha)} · ${c.apoyos} apoyos comunitarios.</p></div>
-              <div class="state-box official"><div class="st-label">Estado actual · Municipio</div><div class="st-value">${statusBadge(c.estado)} ${c.verificado ? "Verificado" : ""}</div><p>${c.evidenciaFoto ? "Parte de intervención y registro visual disponibles." : c.evidencia ? esc(c.evidencia) : "El municipio todavía no informó una solución con evidencia."}</p></div>
+              <div class="state-box official"><div class="st-label">Estado actual · Municipio</div><div class="st-value">${statusBadge(c.estado)} ${c.verificado ? "Verificado" : ""}</div><p>${ESTADO_DESC[c.estado] || ""}</p></div>
             </div>
             ${c.evidencia || c.evidenciaFoto || c.evidenciaMedia ? `<div class="resolution-evidence">
               <div><span class="eyebrow">${c.estado === "resuelto" ? icon("check", 14) + " Intervención finalizada" : "Seguimiento municipal"}</span>
@@ -794,7 +801,7 @@ function renderReclamo(id) {
             <ul class="timeline">
               <li class="done"><div class="t">Reclamo publicado</div><div class="d">${fmtDate(c.fecha)}</div></li>
               <li class="${c.verificado ? "done" : ""}"><div class="t">Verificado por el municipio</div><div class="d">${c.verificado ? "Información validada" : "Pendiente"}</div></li>
-              <li class="${c.estado !== "abierto" ? "done" : ""}"><div class="t">En proceso</div><div class="d">${c.estado !== "abierto" ? "El municipio está interviniendo" : "Aún no iniciado"}</div></li>
+              <li class="${c.estado !== "abierto" ? "done" : ""}"><div class="t">En curso</div><div class="d">${c.estado !== "abierto" ? "El municipio está interviniendo" : "Aún no iniciado"}</div></li>
               <li class="${c.estado === "resuelto" ? "done" : ""}"><div class="t">Resuelto con evidencia</div><div class="d">${c.estado === "resuelto" ? (c.fechaResolucion ? fmtDate(c.fechaResolucion) : "Solución verificada") : "Pendiente"}</div></li>
             </ul>
           </div>
@@ -833,7 +840,7 @@ function renderCrear() {
     </div>
     <form class="claim-layout" data-form="crear">
       <div class="panel panel-pad claim-form-panel">
-        <div class="claim-steps"><div class="claim-step active"><span>1</span><b>Datos del reclamo</b></div><i></i><div class="claim-step"><span>2</span>Ubicación</div><i></i><div class="claim-step"><span>3</span>Confirmación</div></div>
+        <div class="claim-steps"><div class="claim-step"><span>1</span>Datos del reclamo</div><i></i><div class="claim-step"><span>2</span>Ubicación</div><i></i><div class="claim-step"><span>3</span>Confirmación</div></div>
         <div class="claim-section-title"><span class="claim-section-icon">${icon("doc",22)}</span><div><h2>Datos del reclamo</h2><p>Describí el problema con la mayor claridad posible.</p></div></div>
         <div class="field"><label for="categoria">Categoría</label><select class="input claim-input" id="categoria" name="categoria" required><option value="">Seleccioná una categoría</option>${opts}</select></div>
         <div class="field"><div class="claim-label-row"><label for="descripcion">Descripción del problema</label><small>Obligatorio</small></div><textarea class="textarea claim-textarea" id="descripcion" name="descripcion" required minlength="20" maxlength="500" placeholder="Contanos el problema…"></textarea><div class="claim-counter"><span>Intentá ser claro y específico.</span><span id="claimCharCount">0 / 500</span></div></div>
@@ -971,33 +978,32 @@ function renderMisReclamos() {
   const estado = getRoute().params.get("estado");
   const active = Object.hasOwn(ESTADOS, estado) ? estado : "";
   const tabs = [["", "Todos"], ["abierto", "En revisión"], ["en_proceso", "En curso"], ["resuelto", "Resueltos"]];
-  // Reclamos de muestra para que la pantalla no se vea vacía en la demo.
-  const demo = [
-    { id:"demo-vereda", titulo:"Vereda en mal estado", categoria:"infraestructura", direccion:"Av. Maipú 3840, Olivos", descripcion:"La vereda está hundida y con baldosas rotas, lo que dificulta el paso de peatones.", estado:"abierto", fecha:"2026-11-12", demo:true, imagen:"assets/fotos-referencia/vereda.jpg" },
-    { id:"demo-luz", titulo:"Luminaria apagada", categoria:"alumbrado", direccion:"Yrigoyen 1550, Florida", descripcion:"La farola lleva varios días sin funcionar y la cuadra queda muy oscura.", estado:"en_proceso", fecha:"2026-11-10", demo:true, imagen:"assets/fotos-referencia/alumbrado-card.webp" },
-    { id:"demo-basura", titulo:"Basura acumulada", categoria:"limpieza", direccion:"Mitre 3200, Villa Martelli", descripcion:"Hay varios días de residuos sin recolectar en la esquina.", estado:"resuelto", fecha:"2026-11-05", demo:true, imagen:"assets/fotos-referencia/limpieza-card.webp" }
-  ];
-  const records = mine.length ? mine : demo;
-  const filtered = active ? records.filter((c) => c.estado === active) : records;
-  const count = (key) => records.filter((c) => !key || c.estado === key).length;
+  const filtered = active ? mine.filter((c) => c.estado === active) : mine;
+  const count = (key) => mine.filter((c) => !key || c.estado === key).length;
   const cards = filtered.map((c) => {
-    const demoCard = c.demo;
     const category = REPORT_CATEGORIES[c.categoria]?.label || c.categoria || "Espacio público";
-    const status = ESTADOS[c.estado]?.label || (c.estado === "abierto" ? "En revisión" : c.estado === "en_proceso" ? "En curso" : "Resuelto");
+    const status = ESTADOS[c.estado] || "En revisión";
     const statusClass = c.estado === "abierto" ? "review" : c.estado === "en_proceso" ? "progress" : "done";
-    return `<article class="panel my-claim-card ${demoCard ? "demo-claim" : ""}">
-      <span class="my-claim-symbol ${statusClass}">${icon(c.estado === "resuelto" ? "check" : c.categoria === "alumbrado" ? "sun" : c.categoria === "limpieza" ? "trash" : "tools", 25)}</span>
-      ${demoCard ? `<img class="my-claim-thumb" src="${c.imagen}" alt="Imagen ilustrativa: ${esc(c.titulo)}">` : `<span class="my-claim-thumb my-claim-placeholder">${icon("image",25)}</span>`}
-      <div class="my-claim-info"><h3>${esc(c.titulo || c.descripcion || "Reclamo vecinal")}</h3><div class="my-claim-meta"><span>${esc(category)}</span><i>·</i><span>${esc(c.direccion || c.ubicacion || "Vicente López")}</span></div><p>${esc(c.descripcion || "Seguimiento del reclamo vecinal.")}</p>${demoCard ? '<small class="demo-label">Reclamo de ejemplo</small>' : ""}</div>
-      <div class="my-claim-status"><span class="claim-status-pill ${statusClass}">${icon(c.estado === "resuelto" ? "check" : c.estado === "en_proceso" ? "settings" : "clock", 14)} ${esc(status)}</span><span class="my-claim-date">${icon("calendar",15)} ${fmtDate(c.fecha)}</span></div>
-      ${demoCard ? `<span class="my-claim-arrow" aria-hidden="true">${icon("chevron-right",20)}</span>` : `<a class="my-claim-arrow" href="#/reclamo/${esc(c.id)}" aria-label="Ver ${esc(c.titulo || "reclamo")}">${icon("chevron-right",20)}</a>`}
-    </article>`;
+    const statusIconMarkup = c.estado === "en_proceso"
+      ? `<img class="my-claim-gear-icon" src="assets/ilustracion-icono-doodle-engranaje_53876-5596.avif" alt="" width="14" height="14">`
+      : icon(c.estado === "resuelto" ? "check" : "clock", 13);
+    // La foto que adjuntó el vecino; si no adjuntó, una genérica real según la categoría.
+    const attached = c.foto && !String(c.foto).startsWith("data:video/");
+    const photoSrc = attached
+      ? c.foto
+      : (claimPhoto({ ...c, foto: "" }, "card") || "assets/fotos-referencia/otro-card.webp");
+    const photoAlt = (attached ? "Foto del reclamo" : "Imagen de referencia") + ": " + (c.titulo || category);
+    return `<a class="panel my-claim-card" href="#/reclamo/${esc(c.id)}" aria-label="Ver ${esc(c.titulo || "reclamo")}">
+      <img class="my-claim-thumb" src="${esc(photoSrc)}" alt="${esc(photoAlt)}" loading="lazy">
+      <div class="my-claim-info"><h3>${esc(c.titulo || c.descripcion || "Reclamo vecinal")}</h3><div class="my-claim-meta"><span>${esc(category)}</span><i>·</i><span>${esc(c.direccion || c.ubicacion || "Vicente López")}</span></div><p>${esc(c.descripcion || "Seguimiento del reclamo vecinal.")}</p></div>
+      <div class="my-claim-status"><span class="claim-status-pill ${statusClass}">${statusIconMarkup} ${esc(status)}</span><span class="my-claim-date">${icon("calendar", 13)} ${fmtDate(c.fecha)}</span></div>
+      <span class="my-claim-arrow" aria-hidden="true">${icon("chevron",20)}</span>
+    </a>`;
   }).join("");
   return `<section class="section my-claims-page"><div class="container">
-    <header class="my-claims-hero"><div class="my-claims-hero-copy"><span class="eyebrow">${icon("file",15)} Mis reclamos</span><h1>Mis reclamos</h1><p>Revisá el estado y las novedades de tus reportes.</p></div><div class="my-claims-hero-art" aria-hidden="true"><span class="claims-hill hill-one"></span><span class="claims-hill hill-two"></span><span class="claims-building">▥ ▥ ▥</span><span class="claims-tree">♣</span></div></header>
+    <header class="my-claims-hero"><div class="my-claims-hero-copy"><h1>Mis reclamos</h1><p>Revisá el estado y las novedades de tus reportes.</p></div><div class="my-claims-hero-art" aria-hidden="true"><span class="claims-hill hill-one"></span><span class="claims-hill hill-two"></span><span class="claims-building">▥ ▥ ▥</span><span class="claims-tree">♣</span></div></header>
     <div class="my-claims-toolbar"><nav class="chipbar status-tabs" aria-label="Filtrar por estado">${tabs.map(([key,label]) => `<a class="chipbtn ${key === active ? "is-active" : ""}" ${key === active ? 'aria-current="page"' : ""} href="#/mis-reclamos${key ? "?estado=" + key : ""}">${label} (${count(key)})</a>`).join("")}</nav><a class="btn btn-primary" href="#/crear">${icon("plus",17)} Crear reclamo</a></div>
-    ${filtered.length ? `<div class="my-claims-list">${cards}</div>` : `<div class="empty"><p>No tenés reclamos en este estado.</p></div>`}
-    ${!mine.length ? '<p class="demo-note">Estos reclamos son ejemplos visuales. Cuando publiques los tuyos, aparecerán acá.</p>' : ""}
+    ${filtered.length ? `<div class="my-claims-list">${cards}</div>` : `<div class="empty"><p>${mine.length ? "No tenés reclamos en este estado." : "Todavía no tenés reclamos."}</p>${mine.length ? "" : `<a class="btn btn-primary" href="#/crear">Crear mi primer reclamo</a>`}</div>`}
   </div></section>`;
 }
 
@@ -1209,8 +1215,8 @@ function updateMapView(previous, current) {
 const CHART_LEAD_MS = 240;
 const CHART_TRACE_MS = 1450;
 const CHART_STATES = [
-  { key: "abierto", label: "Abiertos", color: "#a55e2c" },
-  { key: "en_proceso", label: "En proceso", color: "#416b98" },
+  { key: "abierto", label: "En revisión", color: "#a55e2c" },
+  { key: "en_proceso", label: "En curso", color: "#416b98" },
   { key: "resuelto", label: "Resueltos", color: "#327452" },
 ];
 
@@ -1863,13 +1869,20 @@ document.addEventListener("click", (e) => {
 });
 
 document.addEventListener("input", (event) => {
+  if (event.target.id === "descripcion") {
+    const counter = document.getElementById("claimCharCount");
+    if (counter) counter.textContent = `${event.target.value.length} / 500`;
+    return;
+  }
   if (event.target.id !== "draftAddress") return;
   clearAddressResults();
-  if (!draftAddress) return;
+  if (event.target.value.trim() === draftAddress) return;
   draftAddress = "";
   draftPicked = false;
-  document.getElementById("draftPin").hidden = true;
-  document.getElementById("draftBarrio").innerHTML = draftLocationLabel();
+  const pin = document.getElementById("draftPin");
+  if (pin) pin.hidden = true;
+  const label = document.getElementById("draftBarrio");
+  if (label) label.innerHTML = draftLocationLabel();
 });
 
 /* ---------------- Eventos: change ---------------- */
