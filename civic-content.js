@@ -1,6 +1,6 @@
 /* Contenido institucional de AvisAR */
 const MUNICIPAL_SITE = "https://www.vicentelopez.gov.ar/";
-const MUNICIPAL_FEED = MUNICIPAL_SITE + "wp-json/wp/v2/posts?per_page=6&_fields=title,link,date,excerpt";
+const MUNICIPAL_FEED = MUNICIPAL_SITE + "wp-json/wp/v2/posts?per_page=6&_embed=1";
 const MUNICIPAL_NEWS = [
   ["Deportes", "6 nov 2026", "Colonia de verano 2027", "Actividades deportivas y recreativas para chicos y chicas durante enero y febrero.", "deportes/novedad/colonia-de-verano-2027-en-vicente-lopez/"],
   ["Servicios", "6 nov 2026", "Cambios de atención durante los feriados", "El Municipio publicó el cronograma de servicios para el 9 y el 11 de noviembre.", "novedad/servicios-municipales-durante-los-feriados-del-9-y-11-de-noviembre/"],
@@ -8,15 +8,20 @@ const MUNICIPAL_NEWS = [
 ];
 
 function newsCards(news) {
-  return news.map(([area, date, title, body, url]) => `<article class="panel panel-pad civic-news">
-    <span class="eyebrow">${esc(area)}</span><p class="muted">${esc(date)}</p><h2>${esc(title)}</h2>
-    ${body ? `<p>${esc(body)}</p>` : ""}<a href="${esc(new URL(url, MUNICIPAL_SITE).href)}">Leer publicación municipal →</a></article>`).join("");
+  return news.map(([area, date, title, body, url, image]) => {
+    const href = esc(new URL(url, MUNICIPAL_SITE).href);
+    return `<article class="panel civic-news">
+    ${image ? `<a class="civic-news-media" href="${href}" tabindex="-1" aria-hidden="true"><img src="${esc(image)}" alt="" loading="lazy"></a>` : ""}
+    <div class="civic-news-body"><span class="eyebrow">${esc(area)}</span><p class="muted">${esc(date)}</p><h2>${esc(title)}</h2>
+    ${body ? `<p>${esc(body)}</p>` : ""}<a href="${href}">Leer publicación municipal →</a></div></article>`;
+  }).join("");
 }
 
 function newsHeadlines(news) {
-  return news.slice(0, 3).map(([, date, title, , url]) => `<li>
-    <a href="${esc(new URL(url, MUNICIPAL_SITE).href)}"><span class="home-news-date">${esc(date)}</span>
-      <span class="home-news-title">${esc(title)}</span></a>
+  return news.slice(0, 3).map(([, date, title, , url, image]) => `<li>
+    <a href="${esc(new URL(url, MUNICIPAL_SITE).href)}">${image ? `<img class="home-news-thumb" src="${esc(image)}" alt="" loading="lazy">` : ""}
+      <span class="home-news-copy"><span class="home-news-date">${esc(date)}</span>
+      <span class="home-news-title">${esc(title)}</span></span></a>
   </li>`).join("");
 }
 
@@ -114,9 +119,13 @@ async function updateMunicipalNews(results) {
       const url = URL.canParse(post.link) && new URL(post.link);
       const date = new Date(post.date);
       if (!title || !url || url.origin !== new URL(MUNICIPAL_SITE).origin || !Number.isFinite(date.getTime())) return [];
-      const words = text(post.excerpt?.rendered).split(" ");
-      const summary = words.length > 18 ? words.slice(0, 18).join(" ") + "…" : words.join(" ");
-      return [["Portal municipal", fmtDate(post.date.slice(0, 10)), title, summary, url.href]];
+      const media = post._embedded?.["wp:featuredmedia"]?.[0];
+      const sizes = media?.media_details?.sizes || {};
+      const rawImage = (sizes.medium_large || sizes.large || sizes.medium || sizes.full)?.source_url || media?.source_url || "";
+      const image = typeof rawImage === "string" && rawImage.startsWith("https://") ? rawImage : "";
+      const words = text(post.excerpt?.rendered).split(/\s+/).filter(Boolean);
+      const summary = words.length > 14 ? words.slice(0, 14).join(" ") + "…" : words.join(" ");
+      return [["Portal municipal", fmtDate(post.date.slice(0, 10)), title, summary, url.href, image]];
     });
     if (!news.length || !results.isConnected || results.contains(document.activeElement)) return;
     results.innerHTML = results.dataset.newsView === "preview" ? newsHeadlines(news) : newsCards(news);

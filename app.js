@@ -2,7 +2,9 @@
 
 const STORE_KEY = "avisar_vl_v2";
 const THRESHOLD = 100;
-const CLAIM_TITLE_LIMIT = 48;
+const CLAIM_TITLE_LIMIT = 30;
+const CLAIM_DESC_LIMIT = 200;
+const CLAIM_MAX_PHOTOS = 5;
 const EMPTY_SESSION = { logged: false, email: "", nombre: "" };
 const SESSION_KEY = STORE_KEY + "_session";
 const ADMIN_EMAIL = "admin@avisar.test";
@@ -30,6 +32,7 @@ const REPORT_CATEGORIES = {
 
 const ESTADOS = { abierto: "En revisión", en_proceso: "En curso", resuelto: "Resuelto" };
 const ESTADO_DESC = { abierto: "El reclamo fue recibido y está pendiente de inspección municipal.", en_proceso: "El municipio está interviniendo en el lugar.", resuelto: "La intervención finalizó y quedó registrada." };
+const PRIORIDADES = { baja: "Baja", media: "Media", alta: "Alta" };
 
 const ICONS = {
   seguridad: '<path d="M12 3l7 3v5c0 5-3.5 8.5-7 10-3.5-1.5-7-5-7-10V6l7-3z"/><path d="M9.5 11.5l1.8 1.8 3.4-3.6"/>',
@@ -63,6 +66,9 @@ const ICONS = {
   upload: '<path d="M12 16V4"/><path d="M7 9l5-5 5 5"/><path d="M4 20h16"/>',
   logout: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/>',
   crosshair: '<circle cx="12" cy="12" r="7"/><path d="M12 2v3"/><path d="M12 19v3"/><path d="M2 12h3"/><path d="M19 12h3"/>',
+  flag: '<path d="M5 21V4"/><path d="M5 5h13l-2.6 4.5L18 14H5"/>',
+  play: '<circle cx="12" cy="12" r="9"/><path d="M10 8.5l6 3.5-6 3.5z"/>',
+  info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v5"/><path d="M12 8h.01"/>',
 };
 
 function icon(name, size = 20, stroke = 2) {
@@ -230,7 +236,7 @@ function claimCard(c) {
     <a class="claim-card" href="#/reclamo/${c.id}">
       <div class="claim-photo" style="--c:${cat.color}">${media}</div>
       <div class="claim-body">
-        <div style="display:flex;gap:7px;flex-wrap:wrap">${catChip(c.categoria)}${statusBadge(c.estado)}</div>
+        <div style="display:flex;gap:7px;flex-wrap:wrap">${catChip(c.categoria)}${statusBadge(c.estado)}${c.apoyos >= THRESHOLD ? `<span class="badge badge-petition">${icon("doc", 12)} Petición colectiva</span>` : ""}</div>
         <h3 class="claim-title">${esc(c.titulo)}</h3>
         <div class="claim-meta">${icon("pin", 15)} ${esc(c.barrio)} · ${esc(c.direccion)}</div>
         <p class="claim-desc">${esc(c.descripcion)}</p>
@@ -529,10 +535,18 @@ function updateShell(view) {
 
 function authGate(title, text, { municipal = false } = {}) {
   const next = encodeURIComponent(location.hash || "#/");
-  return `<section class="section"><div class="container"><div class="auth-wrap"><div class="auth-card center view-heading">
-    <h1>${esc(title)}</h1><p class="sub">${esc(text)}</p>
-    <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap"><a class="btn btn-primary" href="#/login?next=${next}">${municipal ? "Ingresar como administrador" : "Iniciar sesión"}</a>${municipal ? "" : `<a class="btn btn-ghost" href="#/registro?next=${next}">Crear cuenta</a>`}</div>
-  </div></div></div></section>`;
+  return `<section class="section"><div class="container"><div class="auth-wrap">
+    <div class="auth-card auth-gate">
+      <span class="auth-gate-icon">${icon(municipal ? "building" : "lock", 30)}</span>
+      <h1>${esc(title)}</h1>
+      <p class="sub">${esc(text)}</p>
+      <div class="auth-gate-actions">
+        <a class="btn btn-primary" href="#/login?next=${next}">${icon("user", 18)} ${municipal ? "Ingresar como administrador" : "Iniciar sesión"}</a>
+        ${municipal ? "" : `<a class="btn btn-ghost" href="#/registro?next=${next}">${icon("plus", 18)} Crear cuenta</a>`}
+      </div>
+      ${municipal ? "" : `<p class="auth-gate-foot">${icon("check", 15)} Es gratis y solo te lleva un minuto.</p>`}
+    </div>
+  </div></div></section>`;
 }
 
 /* ---------------- Vistas ---------------- */
@@ -627,17 +641,25 @@ function renderHome() {
     </section>`;
 }
 
+function prioritizeClaims(list, compare) {
+  const petitions = [];
+  const rest = [];
+  list.forEach((claim) => (claim.apoyos >= THRESHOLD ? petitions : rest).push(claim));
+  if (compare) { petitions.sort(compare); rest.sort(compare); }
+  return petitions.concat(rest);
+}
+
 function filteredClaims() {
   const { params } = getRoute();
   const cat = params.get("cat") || "todos";
   const estado = params.get("estado") || "todos";
   const q = (params.get("q") || "").toLowerCase();
-  return state.claims.filter((c) => {
+  return prioritizeClaims(state.claims.filter((c) => {
     if (cat !== "todos" && c.categoria !== cat) return false;
     if (estado !== "todos" && c.estado !== estado) return false;
     if (q && !`${c.titulo} ${c.descripcion} ${c.barrio} ${c.direccion}`.toLowerCase().includes(q)) return false;
     return true;
-  }).sort((a, b) => b.apoyos - a.apoyos);
+  }), (a, b) => b.apoyos - a.apoyos);
 }
 
 function renderReclamos() {
@@ -685,7 +707,7 @@ function claimRow(c, { thumbnail = false, status = false } = {}) {
       <p class="muted">${esc(cat.label)} · ${esc(c.barrio)} · ${fmtDate(c.fecha)} · #${esc(c.numero)}</p>
       <p class="claim-summary">${esc(c.descripcion)}</p>
     </div>
-    <div class="claim-row-actions">${status ? statusBadge(c.estado) : ""}<a href="#/reclamo/${esc(c.id)}">Ver detalle →</a></div>
+    <div class="claim-row-actions">${c.apoyos >= THRESHOLD ? `<span class="badge badge-petition">${icon("doc", 12)} Petición colectiva</span>` : ""}${status ? statusBadge(c.estado) : ""}<a href="#/reclamo/${esc(c.id)}">Ver detalle →</a></div>
   </article>`;
 }
 
@@ -717,7 +739,7 @@ function claimPagination(claims, route, params, perPage = 10, compact = false) {
 }
 
 function renderVerReclamos() {
-  const claims = state.claims.slice().sort((a, b) => b.fecha.localeCompare(a.fecha));
+  const claims = prioritizeClaims(state.claims.slice(), (a, b) => b.fecha.localeCompare(a.fecha));
   const { page, count, navigation } = claimPagination(claims, "ver-reclamos", getRoute().params);
   return `<section class="section"><div class="container">
     <div class="section-head"><div class="view-heading"><h1 id="claim-results" tabindex="-1">Ver reclamos</h1><p>Reclamos hechos por vecinos.</p></div>
@@ -726,6 +748,56 @@ function renderVerReclamos() {
     ${page.length ? `<p class="page-count" role="status">${count}</p><div class="claim-list">${page.map((c) => claimRow(c)).join("")}</div>` : `<div class="empty"><p>Todavía no hay reclamos publicados.</p><a class="btn btn-primary" href="#/crear">Crear reclamo</a></div>`}
     ${navigation}
   </div></section>`;
+}
+
+function claimMediaItems(c) {
+  const items = [];
+  if (Array.isArray(c.fotos)) {
+    c.fotos.filter((src) => typeof src === "string" && src && !src.startsWith("data:video/"))
+      .forEach((src) => items.push({ type: "image", src }));
+  }
+  const video = typeof c.video === "string" && c.video.startsWith("data:video/") ? c.video
+    : typeof c.foto === "string" && c.foto.startsWith("data:video/") ? c.foto : "";
+  if (video) items.push({ type: "video", src: video });
+  if (!items.length && c.foto && !String(c.foto).startsWith("data:video/")) items.push({ type: "image", src: c.foto });
+  return items;
+}
+
+function renderClaimMedia(c, cat, reference) {
+  if (reference) return { html: `<img class="media-img" src="${esc(reference.src)}" alt="${esc(reference.label)}">`, hasMedia: true };
+  const items = claimMediaItems(c);
+  if (!items.length) return { html: icon(cat.icon, 64, 1.6), hasMedia: false };
+  const slide = (item, i) => item.type === "video"
+    ? `<figure class="mc-slide"${i ? " hidden" : ""}><video class="media-img" src="${esc(item.src)}" controls preload="metadata" aria-label="Video del reclamo"></video></figure>`
+    : `<figure class="mc-slide"${i ? " hidden" : ""}><img class="media-img" src="${esc(item.src)}" alt="Foto ${i + 1} del reclamo"></figure>`;
+  if (items.length === 1) return { html: slide(items[0], 0), hasMedia: true };
+  return {
+    hasMedia: true,
+    html: `<div class="media-carousel" data-carousel>
+    ${items.map(slide).join("")}
+    <button type="button" class="mc-nav mc-prev" data-carousel-move="-1" aria-label="Ver anterior">‹</button>
+    <button type="button" class="mc-nav mc-next" data-carousel-move="1" aria-label="Ver siguiente">›</button>
+    <span class="mc-count" data-carousel-count>1 / ${items.length}</span>
+    <div class="mc-dots">${items.map((_, i) => `<button type="button" class="mc-dot${i ? "" : " is-active"}" data-carousel-goto="${i}" aria-label="Ir a la ${i + 1}"></button>`).join("")}</div>
+  </div>`,
+  };
+}
+
+function showCarouselSlide(carousel, index) {
+  const slides = [...carousel.querySelectorAll(".mc-slide")];
+  if (!slides.length) return;
+  const next = ((index % slides.length) + slides.length) % slides.length;
+  slides.forEach((slide, i) => { slide.hidden = i !== next; });
+  carousel.querySelectorAll("[data-carousel-goto]").forEach((dot, i) => dot.classList.toggle("is-active", i === next));
+  const count = carousel.querySelector("[data-carousel-count]");
+  if (count) count.textContent = `${next + 1} / ${slides.length}`;
+  slides.forEach((slide, i) => { const video = slide.querySelector("video"); if (video && i !== next) video.pause(); });
+}
+
+function moveCarousel(carousel, delta) {
+  const slides = [...carousel.querySelectorAll(".mc-slide")];
+  const current = slides.findIndex((slide) => !slide.hidden);
+  showCarouselSlide(carousel, current + delta);
 }
 
 function renderReclamo(id) {
@@ -741,10 +813,7 @@ function renderReclamo(id) {
   const pct = Math.min(100, Math.round((c.apoyos / THRESHOLD) * 100));
   const ready = c.apoyos >= THRESHOLD;
   const reference = referencePhoto(c);
-  const photo = reference?.src || c.foto;
-  const media = photo?.startsWith("data:video/")
-    ? `<video class="media-img" src="${esc(photo)}" controls preload="metadata" aria-label="Video del reclamo"></video>`
-    : photo ? `<img class="media-img" src="${esc(photo)}" alt="${esc(reference?.label || "Foto del reclamo")}">` : icon(cat.icon, 64, 1.6);
+  const media = renderClaimMedia(c, cat, reference);
   const news = c.comentarios.filter((m) => m.muni).slice(-3).reverse();
   const comments = c.comentarios.length ? c.comentarios.map((m) => `
     <div class="comment"><div class="avatar ${m.muni ? "muni" : ""}">${m.muni ? icon("building", 18) : esc((m.autor || "V").slice(0, 1).toUpperCase())}</div>
@@ -757,7 +826,7 @@ function renderReclamo(id) {
         <div>
           <div class="panel panel-pad">
             <div class="claim-detail-actions">
-              <div class="claim-detail-badges">${catChip(c.categoria)}${statusBadge(c.estado)}${c.verificado ? '<span class="badge badge-verified">' + icon("check", 13) + " Verificado</span>" : ""}</div>
+              <div class="claim-detail-badges">${catChip(c.categoria)}${statusBadge(c.estado)}${c.prioridad && PRIORIDADES[c.prioridad] ? `<span class="badge badge-prio-${c.prioridad}">${icon("flag", 13)} Prioridad ${esc(PRIORIDADES[c.prioridad])}</span>` : ""}${ready ? `<span class="badge badge-petition">${icon("doc", 12)} Petición colectiva</span>` : ""}${c.verificado ? '<span class="badge badge-verified">' + icon("check", 13) + " Verificado</span>" : ""}</div>
               ${ownsClaim(c) ? `<button type="button" class="btn btn-ghost btn-sm claim-delete-trigger" data-action="open-delete-claim" data-id="${esc(c.id)}">${icon("limpieza", 16)} Borrar reclamo</button>
               <dialog id="claim-delete-dialog" class="modal claim-delete-dialog" aria-labelledby="claim-delete-heading" aria-describedby="claim-delete-description">
                 <h2 id="claim-delete-heading">¿Borrar este reclamo?</h2>
@@ -776,11 +845,13 @@ function renderReclamo(id) {
               <span style="display:inline-flex;align-items:center;gap:6px">${icon("doc", 16)} N° ${esc(c.numero || "")}</span>
             </div>
             <div class="claim-detail-intro">
-              <div><div class="media-frame" style="--c:${cat.color}">${media}</div></div>
+              <div><div class="media-frame${media.hasMedia ? " has-media" : ""}" style="--c:${cat.color}">${media.html}</div></div>
               <div><h2>Descripción</h2><p class="detail-desc">${esc(c.descripcion)}</p>
                 <div class="support-box">
                   <div class="big">${c.apoyos}</div><div class="lbl">apoyos de vecinos</div>
-                  <button class="btn ${supported ? "btn-ghost" : "btn-accent"} btn-block" data-action="support" data-id="${c.id}" ${supported ? "disabled" : ""}>${icon("support", 18)} ${supported ? "Ya apoyaste" : "Apoyar este reclamo"}</button>
+                  ${ownsClaim(c)
+                    ? `<p class="support-own-note">${icon("info", 17)} No podés apoyar tu propio reclamo.</p>`
+                    : `<button class="btn ${supported ? "btn-ghost" : "btn-accent"} btn-block" data-action="support" data-id="${esc(c.id)}" ${supported ? "disabled" : ""}>${icon("support", 18)} ${supported ? "Ya apoyaste" : "Apoyar este reclamo"}</button>`}
                   <div style="width:100%;margin-top:4px"><div class="progress"><i style="width:${pct}%"></i></div><div style="display:flex;justify-content:space-between;font-size:.75rem;color:var(--muted);margin-top:6px"><span>${ready ? "Meta alcanzada" : "Petición colectiva"}</span><span>${c.apoyos}/${THRESHOLD}</span></div></div>
                   ${ready ? `<a class="btn btn-primary btn-block" href="#/peticiones">${icon("doc", 17)} Ver petición colectiva</a>` : `<p class="muted" style="font-size:.77rem;margin:0">Faltan ${THRESHOLD - c.apoyos} apoyos para la carta pública.</p>`}
                 </div>
@@ -790,7 +861,7 @@ function renderReclamo(id) {
             <h3 style="margin:0 0 14px;font-size:1rem">Estado del problema</h3>
             <div class="state-compare">
               <div class="state-box"><div class="st-label">Estado reportado</div><div class="st-value">${icon("users", 17)} Reportado por vecinos</div><p>Publicado el ${fmtDate(c.fecha)} · ${c.apoyos} apoyos comunitarios.</p></div>
-              <div class="state-box official"><div class="st-label">Estado actual · Municipio</div><div class="st-value">${statusBadge(c.estado)} ${c.verificado ? "Verificado" : ""}</div><p>${ESTADO_DESC[c.estado] || ""}</p></div>
+              <div class="state-box official"><div class="st-label">Estado actual · Municipio</div><div class="st-value">${statusBadge(c.estado)}${c.verificado ? ` <span class="verified-word">${icon("check", 15)} Verificado</span>` : ""}</div><p>${ESTADO_DESC[c.estado] || ""}</p></div>
             </div>
             ${c.evidencia || c.evidenciaFoto || c.evidenciaMedia ? `<div class="resolution-evidence">
               <div><span class="eyebrow">${c.estado === "resuelto" ? icon("check", 14) + " Intervención finalizada" : "Seguimiento municipal"}</span>
@@ -836,21 +907,23 @@ function renderReclamo(id) {
 function renderCrear() {
   if (!state.session.logged) return authGate("Iniciá sesión para crear un reclamo", "Necesitás una cuenta vecinal para publicar, comentar y apoyar reclamos.");
   const opts = Object.entries(REPORT_CATEGORIES).map(([k, c]) => `<option value="${k}" ${k === draftCat ? "selected" : ""}>${c.label}</option>`).join("");
+  const prioOpts = Object.entries(PRIORIDADES).map(([k, label]) => `<option value="${k}" ${k === "media" ? "selected" : ""}>${label}</option>`).join("");
   return `<section class="section create-claim-page"><div class="container">
     <div class="claim-hero">
       <div class="view-heading"><h1>Subí tu reclamo</h1>
       <p>Contanos qué pasa y ubicá el reclamo. Tu reporte ayuda a mejorar Vicente López.</p></div>
     </div>
-    <form class="claim-layout" data-form="crear">
+    <form class="claim-layout" data-form="crear" novalidate>
       <div class="panel panel-pad claim-form-panel">
         <div class="claim-steps"><div class="claim-step"><span>1</span>Datos del reclamo</div><i></i><div class="claim-step"><span>2</span>Ubicación</div><i></i><div class="claim-step"><span>3</span>Confirmación</div></div>
         <div class="claim-section-title"><span class="claim-section-icon">${icon("doc",22)}</span><div><h2>Datos del reclamo</h2><p>Describí el problema con la mayor claridad posible.</p></div></div>
+        <div class="field"><label for="categoria">Categoría</label><select class="input claim-input" id="categoria" name="categoria" required><option value="">Seleccioná una categoría</option>${opts}</select></div>
         <div class="claim-identity-fields">
-          <div class="field"><label for="titulo">Título del reclamo</label><input class="input claim-input" id="titulo" name="titulo" required maxlength="${CLAIM_TITLE_LIMIT}" placeholder="Ej.: Luminaria apagada"></div>
-          <div class="field"><label for="categoria">Categoría</label><select class="input claim-input" id="categoria" name="categoria" required><option value="">Seleccioná una categoría</option>${opts}</select></div>
+          <div class="field"><label for="titulo">Título del reclamo</label><input class="input claim-input" id="titulo" name="titulo" required maxlength="${CLAIM_TITLE_LIMIT}" placeholder="Ej.: Luminaria apagada"><div class="claim-counter"><span>Un título corto y claro.</span><span id="claimTitleCount">0 / ${CLAIM_TITLE_LIMIT}</span></div></div>
+          <div class="field"><label for="prioridad">Prioridad</label><select class="input claim-input" id="prioridad" name="prioridad">${prioOpts}</select></div>
         </div>
-        <div class="field"><div class="claim-label-row"><label for="descripcion">Descripción del problema</label><small>Obligatorio</small></div><textarea class="textarea claim-textarea" id="descripcion" name="descripcion" required minlength="20" maxlength="500" placeholder="Contanos el problema…"></textarea><div class="claim-counter"><span>Intentá ser claro y específico.</span><span id="claimCharCount">0 / 500</span></div></div>
-        <div class="field"><label for="foto">Adjuntá fotos o videos</label><label class="claim-upload" for="foto"><span class="claim-upload-icon">${icon("camera",30)}</span><span class="claim-upload-copy"><strong>Elegí un archivo</strong><span class="hint" id="uploadName">Imagen o video · Hasta 1,2 MB · Opcional</span></span><input id="foto" name="foto" type="file" accept="image/*,video/*"></label></div>
+        <div class="field"><label for="descripcion">Descripción del problema</label><textarea class="textarea claim-textarea" id="descripcion" name="descripcion" required minlength="20" maxlength="${CLAIM_DESC_LIMIT}" placeholder="Contanos el problema…"></textarea><div class="claim-counter"><span>Intentá ser claro y específico.</span><span id="claimCharCount">0 / ${CLAIM_DESC_LIMIT}</span></div></div>
+        <div class="field"><label for="foto">Fotos y videos</label><label class="claim-upload" for="foto"><span class="claim-upload-icon">${icon("camera",30)}</span><span class="claim-upload-copy"><strong>Elegí fotos o un video</strong><span class="hint" id="uploadName">Hasta ${CLAIM_MAX_PHOTOS} fotos y 1 video · Máx. 1,2 MB c/u</span></span><input id="foto" name="foto" type="file" accept="image/*,video/*" multiple></label><ul class="claim-media-preview" id="claimMediaPreview" hidden></ul></div>
         <div class="claim-form-actions"><a href="#/" class="btn btn-ghost">Cancelar</a><button class="btn btn-primary" type="submit">${icon("arrow",16)} Enviar reclamo</button></div>
       </div>
       <aside class="claim-side">
@@ -860,7 +933,7 @@ function renderCrear() {
           <div class="map-card map-card-pick claim-map-card">${reportMap(state.claims, { pick: true, focus: draftPicked ? draftLatLng : undefined, cls: "pick-map" })}</div>
           <div class="claim-selected-location"><span>${icon("pin",20)}</span><div><small>Ubicación seleccionada:</small><strong id="draftBarrio" aria-live="polite">${draftLocationLabel()}</strong></div><button type="button" class="btn btn-ghost" data-action="focus-map">${icon("crosshair",15)} Modificar</button></div>
         </div>
-        <div class="panel panel-pad claim-tips"><div class="claim-tips-title"><span>☼</span><h2>Consejos para un mejor reclamo</h2></div><ul><li>Elegí la categoría que mejor represente el problema.</li><li>Sumá una descripción clara y breve.</li><li>Adjuntá una foto o video que muestre la situación.</li><li>Marcá la ubicación exacta en el mapa.</li></ul><div class="claim-tips-illustration">📷</div></div>
+        <div class="panel panel-pad claim-tips"><div class="claim-tips-title"><span>☼</span><h2>Consejos para un mejor reclamo</h2></div><ul><li>Elegí la categoría que mejor represente el problema.</li><li>Sumá una descripción clara y breve.</li><li>Adjuntá fotos o un video que muestren la situación.</li><li>Marcá la ubicación exacta en el mapa.</li></ul><div class="claim-tips-illustration">📷</div></div>
       </aside>
     </form>
   </div></section>`;
@@ -1534,6 +1607,15 @@ function toast(msg) {
   toast._t = setTimeout(() => el.classList.remove("show"), 2600);
 }
 
+function flagInvalid(field) {
+  if (!field) return;
+  field.classList.add("is-invalid");
+  const clear = () => field.classList.remove("is-invalid");
+  field.addEventListener("input", clear, { once: true });
+  field.addEventListener("change", clear, { once: true });
+  try { field.focus({ preventScroll: false }); } catch { field.focus(); }
+}
+
 function requireLogin(nextHash) {
   if (state.session.logged) return true;
   toast("Iniciá sesión para continuar.");
@@ -1648,6 +1730,7 @@ function supportClaim(id) {
   if (!requireLogin(location.hash)) return;
   const c = getClaim(id);
   if (!c || ownSupports().includes(id)) return;
+  if (ownsClaim(c)) { toast("No podés apoyar tu propio reclamo."); return; }
   c.apoyos++;
   state.supported[state.session.email] = [...ownSupports(), id];
   state.notifications.unshift({ id: "n" + Date.now(), tipo: "apoyo", recipient: state.session.email, titulo: "Apoyo registrado", texto: `Apoyaste "${c.titulo}".`, fecha: new Date().toISOString().slice(0, 10), leida: false, ref: c.id });
@@ -1742,6 +1825,85 @@ function readFileAsDataURL(file) {
     r.onload = () => resolve(typeof r.result === "string" ? r.result : "");
     r.onerror = () => resolve("");
     r.readAsDataURL(file);
+  });
+}
+
+// Reduce las fotos antes de guardarlas para no llenar el almacenamiento del navegador.
+function compressImageFile(file, maxDim = 1400, quality = 0.72) {
+  return new Promise((resolve) => {
+    const url = URL.createObjectURL(file);
+    const image = new Image();
+    const fallback = () => readFileAsDataURL(file).then(resolve);
+    image.onload = () => {
+      URL.revokeObjectURL(url);
+      try {
+        const scale = Math.min(1, maxDim / Math.max(image.naturalWidth || 1, image.naturalHeight || 1));
+        const width = Math.max(1, Math.round((image.naturalWidth || 1) * scale));
+        const height = Math.max(1, Math.round((image.naturalHeight || 1) * scale));
+        const canvas = document.createElement("canvas");
+        canvas.width = width; canvas.height = height;
+        canvas.getContext("2d").drawImage(image, 0, 0, width, height);
+        canvas.toBlob((blob) => {
+          if (!blob) return fallback();
+          const reader = new FileReader();
+          reader.onload = () => resolve(typeof reader.result === "string" ? reader.result : "");
+          reader.onerror = () => resolve("");
+          reader.readAsDataURL(blob);
+        }, "image/jpeg", quality);
+      } catch { fallback(); }
+    };
+    image.onerror = () => { URL.revokeObjectURL(url); fallback(); };
+    image.src = url;
+  });
+}
+
+async function readClaimMedia(files) {
+  const fotos = [];
+  let video = "";
+  for (const file of files) {
+    if (file.type.startsWith("video/")) {
+      if (!video) video = await readFileAsDataURL(file);
+      continue;
+    }
+    if (!file.type.startsWith("image/") || fotos.length >= CLAIM_MAX_PHOTOS) continue;
+    const foto = await compressImageFile(file);
+    if (foto) fotos.push(foto);
+  }
+  return { fotos, video };
+}
+
+function updateClaimMediaPreview(input) {
+  const files = [...(input.files || [])];
+  const name = document.getElementById("uploadName");
+  const list = document.getElementById("claimMediaPreview");
+  if (name) {
+    name.textContent = files.length
+      ? `${files.length} ${files.length === 1 ? "archivo seleccionado" : "archivos seleccionados"} · Hasta ${CLAIM_MAX_PHOTOS} fotos y 1 video`
+      : `Hasta ${CLAIM_MAX_PHOTOS} fotos y 1 video · Máx. 1,2 MB c/u`;
+  }
+  if (!list) return;
+  list.replaceChildren();
+  list.hidden = !files.length;
+  files.forEach((file) => {
+    const item = document.createElement("li");
+    item.className = "claim-media-item";
+    if (file.type.startsWith("image/")) {
+      const thumb = document.createElement("img");
+      thumb.alt = "";
+      thumb.src = URL.createObjectURL(file);
+      thumb.addEventListener("load", () => URL.revokeObjectURL(thumb.src), { once: true });
+      item.append(thumb);
+    } else {
+      const badge = document.createElement("span");
+      badge.className = "claim-media-video";
+      badge.innerHTML = icon("play", 22);
+      item.append(badge);
+    }
+    const label = document.createElement("span");
+    label.className = "claim-media-name";
+    label.textContent = file.name;
+    item.append(label);
+    list.append(item);
   });
 }
 
@@ -1878,6 +2040,10 @@ document.addEventListener("click", (e) => {
     slider.querySelector(".place-position").textContent = `${next + 1} de ${slides.length}`;
     return;
   }
+  const carouselMove = t.closest("[data-carousel-move]");
+  if (carouselMove) { moveCarousel(carouselMove.closest("[data-carousel]"), Number(carouselMove.dataset.carouselMove)); return; }
+  const carouselGoto = t.closest("[data-carousel-goto]");
+  if (carouselGoto) { showCarouselSlide(carouselGoto.closest("[data-carousel]"), Number(carouselGoto.dataset.carouselGoto)); return; }
   const mapCategory = t.closest("[data-map-category]");
   if (mapCategory) { setMapFilter("cat", mapCategory.dataset.mapCategory); return; }
   if (t.closest('[data-action="find-address"]')) { findDraftAddress(); return; }
@@ -1939,7 +2105,12 @@ document.addEventListener("click", (e) => {
 document.addEventListener("input", (event) => {
   if (event.target.id === "descripcion") {
     const counter = document.getElementById("claimCharCount");
-    if (counter) counter.textContent = `${event.target.value.length} / 500`;
+    if (counter) counter.textContent = `${event.target.value.length} / ${CLAIM_DESC_LIMIT}`;
+    return;
+  }
+  if (event.target.id === "titulo") {
+    const counter = document.getElementById("claimTitleCount");
+    if (counter) counter.textContent = `${event.target.value.length} / ${CLAIM_TITLE_LIMIT}`;
     return;
   }
   if (event.target.id !== "draftAddress") return;
@@ -1964,7 +2135,7 @@ document.addEventListener("change", (e) => {
     location.hash = "#/estadisticas" + (params.size ? "?" + params.toString() : "");
   }
   if (e.target.id === "foto") {
-    document.getElementById("uploadName").textContent = e.target.files[0]?.name || "Imagen o video · Hasta 1,2 MB · Opcional";
+    updateClaimMediaPreview(e.target);
   }
   if (e.target.id === "categoria") {
     draftCat = e.target.value;
@@ -2009,22 +2180,36 @@ document.addEventListener("submit", async (e) => {
     if (!state.session.logged) { requireLogin("#/crear"); return; }
     const data = new FormData(form);
     const categoria = data.get("categoria");
-    if (!Object.hasOwn(REPORT_CATEGORIES, categoria)) { toast("Elegí una categoría."); return; }
+    if (!Object.hasOwn(REPORT_CATEGORIES, categoria)) { toast("Elegí una categoría para tu reclamo."); flagInvalid(form.elements.categoria); return; }
     const titulo = String(data.get("titulo") || "").trim();
-    if (!titulo || titulo.length > CLAIM_TITLE_LIMIT) {
-      toast(`Escribí un título de hasta ${CLAIM_TITLE_LIMIT} caracteres.`);
-      form.elements.titulo.focus();
+    if (!titulo) {
+      toast("Escribí un título para tu reclamo.");
+      flagInvalid(form.elements.titulo);
       return;
     }
+    if (titulo.length > CLAIM_TITLE_LIMIT) {
+      toast(`El título admite hasta ${CLAIM_TITLE_LIMIT} caracteres.`);
+      flagInvalid(form.elements.titulo);
+      return;
+    }
+    const prioridad = Object.hasOwn(PRIORIDADES, data.get("prioridad")) ? data.get("prioridad") : "media";
     const descripcion = String(data.get("descripcion") || "").trim();
-    if (descripcion.length < 20) { toast("La descripción debe tener al menos 20 caracteres."); return; }
+    if (descripcion.length < 20) { toast("La descripción debe tener al menos 20 caracteres."); flagInvalid(form.elements.descripcion); return; }
+    if (descripcion.length > CLAIM_DESC_LIMIT) { toast(`La descripción admite hasta ${CLAIM_DESC_LIMIT} caracteres.`); flagInvalid(form.elements.descripcion); return; }
     if (!draftPicked || String(data.get("direccion") || "").trim() !== draftAddress) {
       toast("Buscá la dirección o elegí un punto en el mapa.");
+      flagInvalid(form.elements.direccion);
       return;
     }
-    const file = form.querySelector('input[type="file"]')?.files[0];
-    if (file && (file.size > 1200000 || !/^(image|video)\//.test(file.type))) {
-      toast("Elegí una imagen o un video de hasta 1,2 MB.");
+    const files = [...(form.querySelector('input[type="file"]')?.files || [])];
+    const invalid = files.find((f) => f.size > 1200000 || !/^(image|video)\//.test(f.type));
+    if (invalid) { toast("Cada archivo debe ser una imagen o un video de hasta 1,2 MB."); return; }
+    if (files.filter((f) => f.type.startsWith("image/")).length > CLAIM_MAX_PHOTOS) {
+      toast(`Podés adjuntar hasta ${CLAIM_MAX_PHOTOS} fotos.`);
+      return;
+    }
+    if (files.filter((f) => f.type.startsWith("video/")).length > 1) {
+      toast("Podés adjuntar un solo video.");
       return;
     }
     const owner = state.session.email;
@@ -2034,18 +2219,18 @@ document.addEventListener("submit", async (e) => {
     const submit = form.querySelector('button[type="submit"]');
     if (submit.disabled) return;
     submit.disabled = true;
-    readFileAsDataURL(file).then((foto) => {
+    readClaimMedia(files).then(({ fotos, video }) => {
       submit.disabled = false;
       if (!form.isConnected || owner !== state.session.email) return;
-      if (file && !foto) { toast("No se pudo leer el archivo. Volvé a elegirlo."); return; }
+      if (files.length && !fotos.length && !video) { toast("No se pudieron leer los archivos. Volvé a elegirlos."); return; }
       const id = "r" + Date.now();
       const claim = {
         id,
         numero: "F-" + (15300 + Math.floor(Math.random() * 700)),
-        titulo,
+        titulo, prioridad,
         categoria, barrio, direccion,
         descripcion, fecha: new Date().toISOString().slice(0, 10), apoyos: 0, estado: "abierto",
-        verificado: false, evidencia: "", foto, owner, comentarios: [],
+        verificado: false, evidencia: "", foto: fotos[0] || video || "", fotos, video, owner, comentarios: [],
         lat, lng,
       };
       state.claims.unshift(claim);
@@ -2055,7 +2240,7 @@ document.addEventListener("submit", async (e) => {
       } catch {
         state.claims.shift();
         state.notifications.shift();
-        toast("No se pudo guardar el reclamo. Probá con un archivo más chico.");
+        toast("No se pudo guardar el reclamo. Probá con archivos más chicos.");
         return;
       }
       draftPicked = false;
