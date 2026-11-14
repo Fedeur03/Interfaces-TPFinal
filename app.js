@@ -133,6 +133,25 @@ function defaults() {
 }
 
 const DEMO_NEIGHBOR_EMAIL = "vecino.demo@avisar.gob.ar";
+const USERNAME_PATTERN = "[a-zA-Z0-9_]{3,24}";
+
+function publicUsername(account) {
+  return account.usuario || (account.email === DEMO_NEIGHBOR_EMAIL ? "Vecino" : "Vecino/a");
+}
+
+function validateUsername(username, currentEmail = "") {
+  if (!new RegExp("^" + USERNAME_PATTERN + "$").test(username)) {
+    toast("El nombre de usuario debe tener entre 3 y 24 letras, números o guiones bajos.");
+    return false;
+  }
+  const key = username.toLowerCase();
+  if (key === "vecino" || state.profiles.some((profile) =>
+    profile.email !== currentEmail && profile.usuario?.toLowerCase() === key)) {
+    toast("Ese nombre de usuario ya está en uso.");
+    return false;
+  }
+  return true;
+}
 
 function normalizeProfile(profile) {
   if (profile?.email === DEMO_NEIGHBOR_EMAIL) {
@@ -529,7 +548,7 @@ function updateShell(view) {
   const ua = document.getElementById("userArea");
   if (ua) {
     if (state.session.logged) {
-      ua.innerHTML = `<a class="user-chip" href="#/perfil" title="Mi perfil"><span class="avatar-sm">${esc(initials(state.session.nombre))}</span><span class="uname">${esc(state.session.nombre)}</span></a>
+      ua.innerHTML = `<a class="user-chip" href="#/perfil" title="Mi perfil"><span class="avatar-sm">${esc(initials(publicUsername(state.session)))}</span><span class="uname">${esc(publicUsername(state.session))}</span></a>
         <button class="icon-btn" data-action="logout" title="Cerrar sesión" aria-label="Cerrar sesión">${icon("logout", 18)}</button>`;
     } else {
       ua.innerHTML = `<a class="btn btn-ghost btn-sm" href="#/login">Ingresar</a><a class="btn btn-primary btn-sm" href="#/registro">Registrarse</a>`;
@@ -831,9 +850,11 @@ function renderReclamo(id) {
   const reference = referencePhoto(c);
   const media = renderClaimMedia(c, cat, reference);
   const news = c.comentarios.filter((m) => m.muni).slice(-3).reverse();
-  const comments = c.comentarios.length ? c.comentarios.map((m) => `
-    <div class="comment"><div class="avatar ${m.muni ? "muni" : ""}">${m.muni ? icon("building", 18) : esc((m.autor || "V").slice(0, 1).toUpperCase())}</div>
-    <div><div class="who">${esc(m.autor)} ${m.muni ? '<span class="badge badge-verified">Oficial</span>' : ""} <span class="when">${fmtDate(m.fecha)}</span></div><p>${esc(m.texto)}</p></div></div>`).join("") : `<p class="muted" style="font-size:.88rem">Todavía no hay comentarios.</p>`;
+  const comments = c.comentarios.length ? c.comentarios.map((m) => {
+    const author = m.muni ? m.autor : m.usuario || "Vecino/a";
+    return `
+    <div class="comment"><div class="avatar ${m.muni ? "muni" : ""}">${m.muni ? icon("building", 18) : esc((author || "V").slice(0, 1).toUpperCase())}</div>
+    <div><div class="who">${esc(author)} ${m.muni ? '<span class="badge badge-verified">Oficial</span>' : ""} <span class="when">${fmtDate(m.fecha)}</span></div><p>${esc(m.texto)}</p></div></div>`; }).join("") : `<p class="muted" style="font-size:.88rem">Todavía no hay comentarios.</p>`;
 
   return `
     <section class="section"><div class="container">
@@ -997,6 +1018,14 @@ function renderRegistro() {
     <div class="register-grid">
       <form data-form="registro">
         <div class="row2">
+          <div class="field"><label for="rnombre">Nombre y apellido</label>
+            <input class="input" id="rnombre" name="nombre" autocomplete="name" maxlength="100" required></div>
+          <div class="field"><label for="rusuario">Nombre de usuario</label>
+            <input class="input" id="rusuario" name="usuario" autocomplete="username" pattern="${USERNAME_PATTERN}"
+              maxlength="24" aria-describedby="rusuario-help" required>
+            <small class="hint" id="rusuario-help">Es público. Usá de 3 a 24 letras, números o guiones bajos.</small></div>
+        </div>
+        <div class="row2">
           <div class="field"><label for="remail">Email</label><input class="input" id="remail" name="email" type="email" autocomplete="email" required></div>
           <div class="field"><label for="remail2">Confirmar email</label><input class="input" id="remail2" name="email2" type="email" required></div>
         </div>
@@ -1057,8 +1086,8 @@ function renderPerfil() {
     <div class="section-head"><div class="view-heading"><h1>Mi cuenta</h1><p>Administrá tus datos y preferencias.</p></div></div>
     <div class="account-grid">
       <aside class="panel panel-pad account-summary">
-        <div class="avatar-lg">${esc(initials(account.nombre))}</div>
-        <h3>${esc(account.nombre)}</h3><p class="muted">${esc(account.email)}</p>
+        <div class="avatar-lg">${esc(initials(publicUsername(account)))}</div>
+        <h3>${esc(municipal ? account.nombre : publicUsername(account))}</h3><p class="muted">${esc(account.email)}</p>
         <hr class="divider"><p><strong>${municipal ? "Administración municipal" : "Cuenta vecinal"}</strong></p>
         <p>Barrio <strong>${esc(account.barrio || "Sin indicar")}</strong></p>
         <a class="btn btn-ghost" href="#/mis-reclamos">Mis reclamos · ${mine.length}</a>
@@ -1078,6 +1107,10 @@ function renderPerfil() {
           <div class="panel panel-pad"><h3>Datos personales</h3><p class="muted">Actualizá la información de tu cuenta.</p>
             <div class="row2">
               <div class="field"><label for="pnombre">Nombre y apellido</label><input class="input" id="pnombre" name="nombre" value="${esc(account.nombre)}" autocomplete="name" required></div>
+              ${municipal ? "" : `<div class="field"><label for="pusuario">Nombre de usuario</label>
+                <input class="input" id="pusuario" name="usuario" autocomplete="username" pattern="${USERNAME_PATTERN}" maxlength="24"
+                  value="${esc(account.usuario || (account.email === DEMO_NEIGHBOR_EMAIL ? "Vecino" : ""))}"
+                  ${account.usuario || account.email === DEMO_NEIGHBOR_EMAIL ? "readonly" : ""}></div>` }
               <div class="field"><label for="pemail">Correo electrónico</label><input class="input" id="pemail" name="email" type="email" autocomplete="email" value="${esc(account.email)}" ${municipal ? "readonly" : "required"}></div>
               <div class="field"><label for="pbarrio">Barrio</label><select class="input" id="pbarrio" name="barrio"><option value="">Sin indicar</option>${Object.keys(BARRIOS).map((b) => `<option ${b === account.barrio ? "selected" : ""}>${esc(b)}</option>`).join("")}</select></div>
               <div class="field"><label for="ptel">Teléfono</label><input class="input" id="ptel" name="celular" type="tel" autocomplete="tel" value="${esc(account.celular || "")}"></div>
@@ -1712,7 +1745,7 @@ function finishLogin(defaultRoute) {
   const { params } = getRoute();
   const next = params.get("next");
   location.hash = next && next.startsWith("#") ? next : defaultRoute;
-  toast("¡Bienvenido/a, " + state.session.nombre + "!");
+  toast("¡Bienvenido/a, " + publicUsername(state.session) + "!");
 }
 
 const mobileSidenav = matchMedia("(max-width:900px)");
@@ -2224,7 +2257,7 @@ document.addEventListener("submit", async (e) => {
     if (!requireLogin(location.hash)) return;
     const c = getClaim(form.dataset.id); if (!c) return;
     const texto = String(new FormData(form).get("texto") || "").trim(); if (!texto) return;
-    c.comentarios.push({ autor: state.session.nombre || "Vecino/a", texto, fecha: new Date().toISOString().slice(0, 10), muni: false });
+    c.comentarios.push({ usuario: publicUsername(state.session), texto, fecha: new Date().toISOString().slice(0, 10), muni: false });
     save(); render(); toast("Comentario publicado."); return;
   }
 
@@ -2311,6 +2344,13 @@ document.addEventListener("submit", async (e) => {
     const email2 = String(data.get("email2") || "").trim();
     const pass = String(data.get("password") || "");
     const pass2 = String(data.get("password2") || "");
+    const nombre = String(data.get("nombre") || "").trim().replace(/\s+/g, " ");
+    const usuario = String(data.get("usuario") || "").trim();
+    if (nombre.split(" ").length < 2 || nombre.length > 100) {
+      toast("Ingresá tu nombre y apellido.");
+      return;
+    }
+    if (!validateUsername(usuario)) return;
     const dniDemo = String(data.get("dni") || "").trim().toUpperCase();
     const tramiteDemo = String(data.get("tramite") || "").trim().toUpperCase();
     if (email.toLowerCase() === DEMO_NEIGHBOR_EMAIL || dniDemo === "DEMO-00000001") {
@@ -2337,7 +2377,8 @@ document.addEventListener("submit", async (e) => {
         toast("El correo o el DNI de prueba ya está registrado.");
         return;
       }
-      loginDemo(email, undefined, { dniDemo, tramiteDemo, identityPassword: { salt, hash }, celular: String(data.get("celular") || "").trim() });
+      if (!validateUsername(usuario)) return;
+      loginDemo(email, nombre, { nombre, usuario, dniDemo, tramiteDemo, identityPassword: { salt, hash }, celular: String(data.get("celular") || "").trim() });
     } catch {
       toast("No se pudo preparar la consulta de documentos.");
     } finally {
@@ -2386,6 +2427,11 @@ document.addEventListener("submit", async (e) => {
     const nombre = String(data.get("nombre") || "").trim();
     if (!nombre) { toast("Ingresá tu nombre."); return; }
     const previousEmail = state.session.email;
+    let usuario = state.session.usuario;
+    if (!usuario && !hasMunicipalAccess() && previousEmail !== DEMO_NEIGHBOR_EMAIL) {
+      usuario = String(data.get("usuario") || "").trim();
+      if (usuario && !validateUsername(usuario, previousEmail)) return;
+    }
     const email = String(data.get("email") || "").trim().toLowerCase();
     if (email !== previousEmail && (email === ADMIN_EMAIL || email === DEMO_NEIGHBOR_EMAIL || previousEmail === DEMO_NEIGHBOR_EMAIL || hasMunicipalAccess())) {
       toast("El correo de esa cuenta está reservado.");
@@ -2404,7 +2450,7 @@ document.addEventListener("submit", async (e) => {
       state.notifications.forEach((n) => { if (n.recipient === previousEmail) n.recipient = email; });
     }
     Object.assign(state.session, {
-      email, nombre,
+      email, nombre, usuario,
       barrio: data.get("barrio"),
       celular: String(data.get("celular") || "").trim(),
       novedades: data.has("novedades"),
