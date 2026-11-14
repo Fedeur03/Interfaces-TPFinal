@@ -132,9 +132,20 @@ function defaults() {
   };
 }
 
+const DEMO_NEIGHBOR_EMAIL = "vecino.demo@avisar.gob.ar";
+
 function normalizeProfile(profile) {
-  if (profile?.email === "vecino.demo@avisar.gob.ar" && profile.nombre === "Vecino Demo") {
-    return { ...profile, nombre: "Vecino" };
+  if (profile?.email === DEMO_NEIGHBOR_EMAIL) {
+    return {
+      ...profile,
+      nombre: profile.nombre === "Vecino Demo" ? "Vecino" : profile.nombre,
+      dniDemo: "DEMO-00000001",
+      tramiteDemo: "DEMO-00000000001",
+      identityPassword: {
+        salt: [37, 135, 61, 250, 169, 250, 237, 32, 29, 43, 206, 129, 33, 151, 96, 134],
+        hash: "df19e6d12b6ae098ee4a0dce629fae15b47cff2a8350a053a9328542b867875a",
+      },
+    };
   }
   return profile;
 }
@@ -636,7 +647,12 @@ function renderHome() {
 
     <section class="section" style="padding-top:0">
       <div class="container">
-        <div class="cta-band"><div><h2>¿Detectaste un problema en tu barrio?</h2><p>Sumá tu reclamo y ayudá a que la comunidad lo vea.</p></div><a class="btn btn-accent" href="#/crear">${icon("plus", 18)} Publicar reclamo</a></div>
+        <div class="cta-band">
+          <div class="cta-copy"><span class="cta-icon" aria-hidden="true">${icon("pin", 24)}</span>
+            <div><h2>¿Detectaste un problema en tu barrio?</h2><p>Sumá tu reclamo y ayudá a que la comunidad lo vea.</p></div>
+          </div>
+          <a class="btn btn-primary" href="#/crear">${icon("plus", 18)} Publicar reclamo</a>
+        </div>
       </div>
     </section>`;
 }
@@ -989,6 +1005,21 @@ function renderRegistro() {
           <div class="field"><label for="fcel">Celular</label><input class="input" id="fcel" name="celular" type="tel" autocomplete="tel" placeholder="11 1234-5678"></div>
         </div>
         <div class="row2">
+        <div class="field">
+          <label for="rdni">DNI</label>
+          <input class="input" id="rdni" name="dni" required maxlength="13" autocomplete="off" spellcheck="false"
+            pattern="[Dd][Ee][Mm][Oo]\\x2D[0-9]{8}" placeholder="DEMO-12345678" aria-describedby="rdni-help identity-help">
+          <small class="hint" id="rdni-help">Es el número de documento que figura en tu DNI.</small>
+        </div>
+        <div class="field">
+          <label for="rtramite">Número de trámite</label>
+          <input class="input" id="rtramite" name="tramite" required maxlength="16" autocomplete="off" spellcheck="false"
+            pattern="[Dd][Ee][Mm][Oo]\\x2D[0-9]{11}" placeholder="DEMO-12345678901" aria-describedby="rtramite-help identity-help">
+          <small class="hint" id="rtramite-help">Buscá el número de 11 dígitos identificado como «Trámite».</small>
+        </div>
+        </div>
+        <p class="hint" id="identity-help">Para este registro, usá los formatos de ejemplo con el prefijo DEMO- y números inventados.</p>
+        <div class="row2">
           <div class="field"><label for="rpass">Contraseña</label><input class="input" id="rpass" name="password" type="password" autocomplete="new-password" required minlength="6"></div>
           <div class="field"><label for="rpass2">Confirmar contraseña</label><input class="input" id="rpass2" name="password2" type="password" autocomplete="new-password" required minlength="6"></div>
         </div>
@@ -1032,21 +1063,33 @@ function renderPerfil() {
         <p>Barrio <strong>${esc(account.barrio || "Sin indicar")}</strong></p>
         <a class="btn btn-ghost" href="#/mis-reclamos">Mis reclamos · ${mine.length}</a>
       </aside>
-      <form class="account-form" data-form="perfil">
-        <div class="panel panel-pad"><h3>Datos personales</h3><p class="muted">Actualizá la información de tu cuenta.</p>
-          <div class="row2">
-            <div class="field"><label for="pnombre">Nombre y apellido</label><input class="input" id="pnombre" name="nombre" value="${esc(account.nombre)}" autocomplete="name" required></div>
-            <div class="field"><label for="pemail">Correo electrónico</label><input class="input" id="pemail" name="email" type="email" autocomplete="email" value="${esc(account.email)}" ${municipal ? "readonly" : "required"}></div>
-            <div class="field"><label for="pbarrio">Barrio</label><select class="input" id="pbarrio" name="barrio"><option value="">Sin indicar</option>${Object.keys(BARRIOS).map((b) => `<option ${b === account.barrio ? "selected" : ""}>${esc(b)}</option>`).join("")}</select></div>
-            <div class="field"><label for="ptel">Teléfono</label><input class="input" id="ptel" name="celular" type="tel" autocomplete="tel" value="${esc(account.celular || "")}"></div>
+      <div class="account-main">
+        ${municipal ? "" : `<section class="panel panel-pad profile-identity" aria-labelledby="profile-identity-title">
+          <h2 id="profile-identity-title">Datos de identificación</h2>
+          ${account.identityPassword ? `<form data-form="ver-documentos">
+            <div class="field"><label for="identity-password">Confirmá tu contraseña</label>
+              <input class="input" type="password" id="identity-password" name="password" autocomplete="current-password" required></div>
+            <button class="btn btn-ghost" type="submit">Ver DNI y número de trámite</button>
+            <p role="status" data-identity-message></p>
+            <dl data-identity-result hidden></dl>
+          </form>` : `<p>Para completar estos datos, volvé a <a href="#/registro">Registrarse</a> y usá el mismo correo de tu cuenta.</p>`}
+        </section>`}
+        <form class="account-form" data-form="perfil">
+          <div class="panel panel-pad"><h3>Datos personales</h3><p class="muted">Actualizá la información de tu cuenta.</p>
+            <div class="row2">
+              <div class="field"><label for="pnombre">Nombre y apellido</label><input class="input" id="pnombre" name="nombre" value="${esc(account.nombre)}" autocomplete="name" required></div>
+              <div class="field"><label for="pemail">Correo electrónico</label><input class="input" id="pemail" name="email" type="email" autocomplete="email" value="${esc(account.email)}" ${municipal ? "readonly" : "required"}></div>
+              <div class="field"><label for="pbarrio">Barrio</label><select class="input" id="pbarrio" name="barrio"><option value="">Sin indicar</option>${Object.keys(BARRIOS).map((b) => `<option ${b === account.barrio ? "selected" : ""}>${esc(b)}</option>`).join("")}</select></div>
+              <div class="field"><label for="ptel">Teléfono</label><input class="input" id="ptel" name="celular" type="tel" autocomplete="tel" value="${esc(account.celular || "")}"></div>
+            </div>
           </div>
-        </div>
-        <div class="panel panel-pad"><h3>Notificaciones</h3>
-          <label class="preference"><span>Recibir novedades sobre mis reclamos</span><input name="novedades" type="checkbox" ${account.novedades !== false ? "checked" : ""}></label>
-          <label class="preference"><span>Preferencia de avisos por correo</span><input name="correo" type="checkbox" ${account.correo ? "checked" : ""}></label>
-        </div>
-        <div class="view-actions"><button class="btn btn-primary" type="submit">Guardar cambios</button></div>
-      </form>
+          <div class="panel panel-pad"><h3>Notificaciones</h3>
+            <label class="preference"><span>Recibir novedades sobre mis reclamos</span><input name="novedades" type="checkbox" ${account.novedades !== false ? "checked" : ""}></label>
+            <label class="preference"><span>Preferencia de avisos por correo</span><input name="correo" type="checkbox" ${account.correo ? "checked" : ""}></label>
+          </div>
+          <div class="view-actions"><button class="btn btn-primary" type="submit">Guardar cambios</button></div>
+        </form>
+      </div>
     </div>
   </div></section>`;
 }
@@ -1628,6 +1671,14 @@ function accountNotifications() {
   return state.notifications.filter((n) => (n.recipient || getClaim(n.ref)?.owner) === state.session.email);
 }
 
+async function identityPasswordHash(password, salt) {
+  const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(password), "PBKDF2", false, ["deriveBits"]);
+  const bits = await crypto.subtle.deriveBits({
+    name: "PBKDF2", hash: "SHA-256", salt: new Uint8Array(salt), iterations: 600000,
+  }, key, 256);
+  return Array.from(new Uint8Array(bits), (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
 function saveProfile() {
   const { logged, remember, role, ...profile } = state.session;
   try {
@@ -1651,6 +1702,7 @@ function loginDemo(email, nombre, details = {}, remember = true) {
   email = knownEmail || email.toLowerCase();
   state.session = { logged: true, email, nombre: nombre || email.split("@")[0].replace(/[._-]/g, " ").replace(/\b\w/g, (m) => m.toUpperCase()) };
   Object.assign(state.session, state.profiles.find((p) => p.email === email), details, { remember });
+  state.session = normalizeProfile(state.session);
   delete state.session.role;
   finishLogin("#/");
 }
@@ -2076,7 +2128,7 @@ document.addEventListener("click", (e) => {
   if (t.closest('[data-action="close-modal"]')) { closeModal(t); return; }
   if (t.closest('[data-action="demo-social"]')) {
     const remember = document.querySelector('[name="remember"]');
-    loginDemo("vecino.demo@avisar.gob.ar", "Vecino", {}, remember?.checked ?? true);
+    loginDemo(DEMO_NEIGHBOR_EMAIL, "Vecino", {}, remember?.checked ?? true);
     return;
   }
   if (t.closest('[data-action="logout"]')) {
@@ -2259,10 +2311,73 @@ document.addEventListener("submit", async (e) => {
     const email2 = String(data.get("email2") || "").trim();
     const pass = String(data.get("password") || "");
     const pass2 = String(data.get("password2") || "");
+    const dniDemo = String(data.get("dni") || "").trim().toUpperCase();
+    const tramiteDemo = String(data.get("tramite") || "").trim().toUpperCase();
+    if (email.toLowerCase() === DEMO_NEIGHBOR_EMAIL || dniDemo === "DEMO-00000001") {
+      toast("Ese correo o DNI está reservado para la cuenta Vecino.");
+      return;
+    }
     if (email !== email2) { toast("Los emails no coinciden."); return; }
     if (pass !== pass2) { toast("Las contraseñas no coinciden."); return; }
     if (pass.length < 6) { toast("La contraseña debe tener al menos 6 caracteres."); return; }
-    loginDemo(email, undefined, { celular: String(data.get("celular") || "").trim() }); return;
+    if (!/^DEMO-[0-9]{8}$/.test(dniDemo)) { toast("Ingresá un DNI de prueba con el formato DEMO-12345678."); return; }
+    if (!/^DEMO-[0-9]{11}$/.test(tramiteDemo)) { toast("Ingresá un número de trámite de prueba con el formato DEMO-12345678901."); return; }
+    const profile = state.profiles.find((item) => item.email.toLowerCase() === email.toLowerCase());
+    if (profile?.identityPassword) { toast("Ese correo ya está registrado."); return; }
+    if (profile?.dniDemo && profile.dniDemo !== dniDemo) { toast("Ingresá el DNI de prueba asociado a esta cuenta."); return; }
+    if (state.profiles.some((item) => item !== profile && item.dniDemo === dniDemo)) { toast("Ese DNI de prueba ya está en uso en este navegador."); return; }
+    const submit = form.querySelector('button[type="submit"]');
+    if (submit.disabled) return;
+    submit.disabled = true;
+    try {
+      const salt = Array.from(crypto.getRandomValues(new Uint8Array(16)));
+      const hash = await identityPasswordHash(pass, salt);
+      if (!form.isConnected) return;
+      if (state.profiles.some((item) => item !== profile && (item.email.toLowerCase() === email.toLowerCase() || item.dniDemo === dniDemo))) {
+        toast("El correo o el DNI de prueba ya está registrado.");
+        return;
+      }
+      loginDemo(email, undefined, { dniDemo, tramiteDemo, identityPassword: { salt, hash }, celular: String(data.get("celular") || "").trim() });
+    } catch {
+      toast("No se pudo preparar la consulta de documentos.");
+    } finally {
+      submit.disabled = false;
+    }
+    return;
+  }
+
+  if (kind === "ver-documentos") {
+    const account = state.session;
+    if (!account.logged || !account.identityPassword) return;
+    const input = form.elements.password;
+    const button = form.querySelector("button");
+    if (button.disabled) return;
+    const result = form.querySelector("[data-identity-result]");
+    const message = form.querySelector("[data-identity-message]");
+    result.hidden = true;
+    result.replaceChildren();
+    message.textContent = "";
+    button.disabled = true;
+    try {
+      const { salt, hash } = account.identityPassword;
+      const matches = await identityPasswordHash(input.value, salt) === hash;
+      if (!form.isConnected || state.session !== account) return;
+      if (!matches) {
+        message.textContent = "La contraseña es incorrecta.";
+        input.focus();
+        return;
+      }
+      result.innerHTML = `<dt>DNI</dt><dd>${esc(account.dniDemo || "Sin registrar")}</dd>
+        <dt>Número de trámite</dt><dd>${esc(account.tramiteDemo || "Sin registrar")}</dd>`;
+      result.hidden = false;
+      message.textContent = "Datos de identificación visibles.";
+    } catch {
+      message.textContent = "No se pudo comprobar la contraseña.";
+    } finally {
+      input.value = "";
+      button.disabled = false;
+    }
+    return;
   }
 
   if (kind === "perfil") {
@@ -2272,8 +2387,8 @@ document.addEventListener("submit", async (e) => {
     if (!nombre) { toast("Ingresá tu nombre."); return; }
     const previousEmail = state.session.email;
     const email = String(data.get("email") || "").trim().toLowerCase();
-    if (email !== previousEmail && (email === ADMIN_EMAIL || hasMunicipalAccess())) {
-      toast("El correo de la cuenta administradora está reservado.");
+    if (email !== previousEmail && (email === ADMIN_EMAIL || email === DEMO_NEIGHBOR_EMAIL || previousEmail === DEMO_NEIGHBOR_EMAIL || hasMunicipalAccess())) {
+      toast("El correo de esa cuenta está reservado.");
       return;
     }
     if (email !== previousEmail) {
@@ -2309,6 +2424,20 @@ document.addEventListener("submit", async (e) => {
       return;
     }
     if (!email || pass.length < 4) { toast("Revisá el email y la contraseña."); return; }
+    const profile = state.profiles.find((item) => item.email.toLowerCase() === email.toLowerCase());
+    const proof = normalizeProfile(profile || { email: email.toLowerCase() })?.identityPassword;
+    if (proof) {
+      try {
+        if (await identityPasswordHash(pass, proof.salt) !== proof.hash) {
+          toast("Revisá el email y la contraseña.");
+          return;
+        }
+      } catch {
+        toast("No se pudo comprobar la contraseña.");
+        return;
+      }
+      if (!form.isConnected) return;
+    }
     loginDemo(email, undefined, {}, data.has("remember")); return;
   }
 

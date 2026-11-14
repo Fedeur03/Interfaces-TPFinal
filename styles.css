@@ -499,9 +499,11 @@
    .step p { margin: 0; color: var(--muted); font-size: .84rem; }
    
    /* ---------- CTA ---------- */
-   .cta-band { border-radius: 18px; padding: 28px; color: #fff; background: radial-gradient(600px 260px at 90% 0%, rgba(249,115,22,.35), transparent 60%), linear-gradient(135deg, #0f766e, #0b5750); display: flex; align-items: center; justify-content: space-between; gap: 20px; flex-wrap: wrap; }
+   .cta-band { border: 1px solid var(--line); border-radius: 18px; padding: 28px; color: var(--ink); background: #fff; display: flex; align-items: center; justify-content: space-between; gap: 20px; flex-wrap: wrap; box-shadow: var(--shadow); }
+   .cta-copy { display: flex; align-items: center; gap: 16px; min-width: 0; }
+   .cta-icon { display: grid; place-items: center; flex: 0 0 46px; height: 46px; border-radius: 12px; background: var(--primary-soft); color: var(--primary); }
    .cta-band h2 { margin: 0 0 6px; font-size: 1.3rem; letter-spacing: -.02em; }
-   .cta-band p { margin: 0; color: #d7f0ec; max-width: 52ch; font-size: .92rem; }
+   .cta-band p { margin: 0; color: var(--muted); max-width: 52ch; font-size: .92rem; }
    
    /* ---------- Footer ---------- */
    .site-footer { margin-top: 26px; border-top: 1px solid #d8cfe6; background: #f2edf7; padding: 38px 0 18px; }
@@ -800,6 +802,19 @@
    #uploadName { overflow-wrap: anywhere; max-width: 100%; }
    .register-wrap { max-width: 870px; }
    .register-grid { grid-template-columns: minmax(0, 2.1fr) minmax(220px, 1fr); }
+   [data-form="registro"] button[type="submit"] {
+     min-height: 46px;
+     padding-inline: 24px;
+     font-size: .98rem;
+     font-weight: 750;
+     box-shadow: 0 4px 12px rgba(36, 100, 79, .2);
+   }
+   .account-main { display: grid; gap: 16px; min-width: 0; }
+   .profile-identity [data-identity-message]:empty { display: none; }
+   .profile-identity h2 { margin-top: 0; font-size: 1.1rem; }
+   .profile-identity form { max-width: 380px; }
+   .profile-identity dt { font-weight: 700; }
+   .profile-identity dd { margin: 0 0 8px; }
    .register-social { border-left: 1px solid var(--line); padding: 24px 0 0 20px; }
    .register-social .social-row { gap: 17px; }
    .login-wrap { max-width: 480px; }
