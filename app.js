@@ -5,6 +5,7 @@ const THRESHOLD = 100;
 const CLAIM_TITLE_LIMIT = 30;
 const CLAIM_DESC_LIMIT = 200;
 const CLAIM_MAX_PHOTOS = 5;
+const CLAIM_FILE_MAX_BYTES = 5 * 1024 * 1024;
 const EMPTY_SESSION = { logged: false, email: "", nombre: "" };
 const SESSION_KEY = STORE_KEY + "_session";
 const ADMIN_EMAIL = "admin@avisar.test";
@@ -960,7 +961,7 @@ function renderCrear() {
           <div class="field"><label for="prioridad">Prioridad</label><select class="input claim-input" id="prioridad" name="prioridad">${prioOpts}</select></div>
         </div>
         <div class="field"><label for="descripcion">Descripción del problema</label><textarea class="textarea claim-textarea" id="descripcion" name="descripcion" required minlength="20" maxlength="${CLAIM_DESC_LIMIT}" placeholder="Contanos el problema…"></textarea><div class="claim-counter"><span>Intentá ser claro y específico.</span><span id="claimCharCount">0 / ${CLAIM_DESC_LIMIT}</span></div></div>
-        <div class="field"><label for="foto">Fotos y videos</label><label class="claim-upload" for="foto"><span class="claim-upload-icon">${icon("camera",30)}</span><span class="claim-upload-copy"><strong>Elegí fotos o un video</strong><span class="hint" id="uploadName">Hasta ${CLAIM_MAX_PHOTOS} fotos y 1 video · Máx. 1,2 MB c/u</span></span><input id="foto" name="foto" type="file" accept="image/*,video/*" multiple></label><ul class="claim-media-preview" id="claimMediaPreview" hidden></ul></div>
+        <div class="field"><label for="foto">Fotos y videos</label><label class="claim-upload" for="foto"><span class="claim-upload-icon">${icon("camera",30)}</span><span class="claim-upload-copy"><strong>Elegí fotos o un video</strong><span class="hint" id="uploadName">Hasta ${CLAIM_MAX_PHOTOS} fotos y 1 video · Máx. 5 MB c/u</span></span><input id="foto" name="foto" type="file" accept="image/*,video/*" multiple></label><ul class="claim-media-preview" id="claimMediaPreview" hidden></ul></div>
         <div class="claim-form-actions"><a href="#/" class="btn btn-ghost">Cancelar</a><button class="btn btn-primary" type="submit">${icon("arrow",16)} Enviar reclamo</button></div>
       </div>
       <aside class="claim-side">
@@ -1032,6 +1033,12 @@ function renderRegistro() {
         <div class="row2">
           <div class="field"><label for="fnac">Fecha de nacimiento</label><input class="input" id="fnac" name="nacimiento" type="date" required></div>
           <div class="field"><label for="fcel">Celular</label><input class="input" id="fcel" name="celular" type="tel" autocomplete="tel" placeholder="11 1234-5678"></div>
+        </div>
+        <div class="field"><label for="rbarrio">Barrio</label>
+          <select class="input" id="rbarrio" name="barrio" required>
+            <option value="" disabled selected>Seleccioná tu barrio</option>
+            ${Object.keys(BARRIOS).map(b => `<option value="${esc(b)}">${esc(b)}</option>`).join("")}
+          </select>
         </div>
         <div class="row2">
         <div class="field">
@@ -1905,7 +1912,7 @@ function fallbackCopy(text) {
 }
 function readFileAsDataURL(file) {
   return new Promise((resolve) => {
-    if (!file || file.size > 1200000) return resolve("");
+    if (!file || file.size > CLAIM_FILE_MAX_BYTES) return resolve("");
     const r = new FileReader();
     r.onload = () => resolve(typeof r.result === "string" ? r.result : "");
     r.onerror = () => resolve("");
@@ -1947,7 +1954,7 @@ async function readClaimMedia(files) {
   let video = "";
   for (const file of files) {
     if (file.type.startsWith("video/")) {
-      if (!video) video = await readFileAsDataURL(file);
+      if (!video) video = await storeClaimVideo(file);
       continue;
     }
     if (!file.type.startsWith("image/") || fotos.length >= CLAIM_MAX_PHOTOS) continue;
@@ -1964,7 +1971,7 @@ function updateClaimMediaPreview(input) {
   if (name) {
     name.textContent = files.length
       ? `${files.length} ${files.length === 1 ? "archivo seleccionado" : "archivos seleccionados"} · Hasta ${CLAIM_MAX_PHOTOS} fotos y 1 video`
-      : `Hasta ${CLAIM_MAX_PHOTOS} fotos y 1 video · Máx. 1,2 MB c/u`;
+      : `Hasta ${CLAIM_MAX_PHOTOS} fotos y 1 video · Máx. 5 MB c/u`;
   }
   if (!list) return;
   list.replaceChildren();
@@ -2287,8 +2294,8 @@ document.addEventListener("submit", async (e) => {
       return;
     }
     const files = [...(form.querySelector('input[type="file"]')?.files || [])];
-    const invalid = files.find((f) => f.size > 1200000 || !/^(image|video)\//.test(f.type));
-    if (invalid) { toast("Cada archivo debe ser una imagen o un video de hasta 1,2 MB."); return; }
+    const invalid = files.find((f) => f.size > CLAIM_FILE_MAX_BYTES || !/^(image|video)\//.test(f.type));
+    if (invalid) { toast("Cada archivo debe ser una imagen o un video de hasta 5 MB."); return; }
     if (files.filter((f) => f.type.startsWith("image/")).length > CLAIM_MAX_PHOTOS) {
       toast(`Podés adjuntar hasta ${CLAIM_MAX_PHOTOS} fotos.`);
       return;
@@ -2351,6 +2358,12 @@ document.addEventListener("submit", async (e) => {
       return;
     }
     if (!validateUsername(usuario)) return;
+    const barrio = String(data.get("barrio") || "").trim();
+    if (!Object.hasOwn(BARRIOS, barrio)) {
+      toast("Seleccioná tu barrio para crear la cuenta.");
+      form.querySelector('[name="barrio"]')?.focus();
+      return;
+    }
     const dniDemo = String(data.get("dni") || "").trim().toUpperCase();
     const tramiteDemo = String(data.get("tramite") || "").trim().toUpperCase();
     if (email.toLowerCase() === DEMO_NEIGHBOR_EMAIL || dniDemo === "DEMO-00000001") {
@@ -2378,7 +2391,7 @@ document.addEventListener("submit", async (e) => {
         return;
       }
       if (!validateUsername(usuario)) return;
-      loginDemo(email, nombre, { nombre, usuario, dniDemo, tramiteDemo, identityPassword: { salt, hash }, celular: String(data.get("celular") || "").trim() });
+      loginDemo(email, nombre, { nombre, usuario, barrio, dniDemo, tramiteDemo, identityPassword: { salt, hash }, celular: String(data.get("celular") || "").trim() });
     } catch {
       toast("No se pudo preparar la consulta de documentos.");
     } finally {

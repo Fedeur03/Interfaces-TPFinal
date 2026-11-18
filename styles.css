@@ -544,7 +544,12 @@
    .civic-news-body .muted { margin: 8px 0 0; font-size: .78rem; }
    .civic-news-body h2 { margin: 6px 0 7px; }
    .civic-news-body > a:last-child { margin-top: auto; padding-top: 6px; }
-   .civic-crosslink { margin-top: 20px; }
+   .civic-crosslink { margin-top: 20px; flex-wrap: wrap; gap: 10px; }
+   .civic-crosslink .btn { max-width: 100%; white-space: normal; text-align: center; justify-content: center; }
+   @media (max-width: 600px) {
+     .civic-crosslink { flex-direction: column; align-items: stretch; }
+     .civic-crosslink .btn { width: 100%; min-width: 0; }
+   }
    .home-municipal-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(270px, .4fr); gap: 20px; align-items: start; }
    .home-news { padding: 20px; border-color: #ded6e9; background: #fbf9fd; }
    .home-news .eyebrow { color: #4f2f7d; background: #eee7f5; }
@@ -784,7 +789,7 @@
    .claim-thumb img { width: 100%; height: 100%; object-fit: cover; }
    .status-tabs { margin-bottom: 16px; }
    .claim-detail-intro, .create-grid, .register-grid, .account-grid, .muni-intro-row, .stats-grid { display: grid; align-items: start; gap: 20px; }
-   .claim-detail-intro { grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); margin-top: 16px; }
+   .claim-detail-intro { grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); margin-top: 16px; }
    .claim-detail-intro h2 { margin: 0 0 6px; font-size: 1rem; }
    .claim-detail-intro .detail-desc { margin: 0 0 14px; white-space: pre-wrap; overflow-wrap: anywhere; }
    .claim-detail-intro .media-frame video { object-fit: contain; background: #152127; }

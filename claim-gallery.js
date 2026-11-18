@@ -1,13 +1,53 @@
 /* Adjuntos del reclamo. La primera foto también se usa en las listas y el mapa. */
 const pendingClaimUploads = new Set();
 
+// Mantener los videos fuera de localStorage evita su límite de unos pocos MB.
+const CLAIM_VIDEO_PREFIX = "data:video/avisar;key=";
+async function storeClaimVideo(file) {
+  if (!file || file.size > CLAIM_FILE_MAX_BYTES) return "";
+  const key = "claim-video-" + crypto.randomUUID();
+  try {
+    await evidenceTransaction("readwrite", store => store.put(file, key));
+    return CLAIM_VIDEO_PREFIX + key;
+  } catch {
+    return "";
+  }
+}
+
+function claimVideoAttributes(src) {
+  return src.startsWith(CLAIM_VIDEO_PREFIX)
+    ? `data-claim-video="${esc(src.slice(CLAIM_VIDEO_PREFIX.length))}"`
+    : `src="${esc(src)}"`;
+}
+
+function loadClaimVideos() {
+  document.querySelectorAll("video[data-claim-video]:not([data-loading])").forEach(async video => {
+    video.dataset.loading = "true";
+    try {
+      const file = await evidenceTransaction("readonly", store => store.get(video.dataset.claimVideo));
+      if (!file) throw new Error("Video no disponible");
+      if (!video.isConnected) return;
+      const url = URL.createObjectURL(file);
+      evidenceURLs.add(url);
+      video.src = url;
+    } catch {
+      if (video.isConnected) {
+        const message = document.createElement("p");
+        message.textContent = "No se pudo cargar el video guardado en este navegador.";
+        video.replaceWith(message);
+      }
+    }
+  });
+}
+new MutationObserver(loadClaimVideos).observe(document.body, { childList: true, subtree: true });
+
 function attachedClaimMedia(claim) {
   return claimMediaItems(claim).map(item => item.src);
 }
 
 function validateClaimFiles(files, current = []) {
-  if (files.some(file => file.size > 1200000 || !/^(image|video)\//.test(file.type))) {
-    toast("Elegí imágenes o videos de hasta 1,2 MB por archivo."); return false;
+  if (files.some(file => file.size > CLAIM_FILE_MAX_BYTES || !/^(image|video)\//.test(file.type))) {
+    toast("Elegí imágenes o videos de hasta 5 MB por archivo."); return false;
   }
   const images = current.filter(src => !src.startsWith("data:video/")).length;
   const videos = current.length - images;
@@ -38,7 +78,7 @@ function claimGallery(claim, selected = 0) {
             : `<img src="${esc(item)}" alt="" loading="lazy">`}</button>`).join("")}
       </div>` : ""}
       <div class="claim-gallery-main">${video
-        ? `<video src="${esc(src)}" controls preload="metadata" aria-label="Video del reclamo"></video>`
+        ? `<video ${claimVideoAttributes(src)} controls preload="metadata" aria-label="Video del reclamo"></video>`
         : src ? `<img src="${esc(src)}" alt="Imagen ${selected + 1} del reclamo">` : icon(catMeta(claim.categoria).icon, 64)}
       </div>
     </div>
@@ -49,7 +89,7 @@ function claimGallery(claim, selected = 0) {
       </label>
       ${attached.length ? `<button type="button" class="btn btn-ghost btn-sm" data-gallery-delete
         ${canDelete && !pendingClaimUploads.has(claim.id) ? "" : "disabled"}>${icon("limpieza", 16)} Borrar adjunto</button>` : ""}
-    </div><p class="hint">Hasta 5 fotos y 1 video · 1,2 MB por archivo. Conservá al menos una imagen.</p>` : ""}
+    </div><p class="hint">Hasta 5 fotos y 1 video · 5 MB por archivo. Conservá al menos una imagen.</p>` : ""}
   </div>`;
 }
 
