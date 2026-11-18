@@ -79,7 +79,11 @@ function claimGallery(claim, selected = 0) {
       </div>` : ""}
       <div class="claim-gallery-main">${video
         ? `<video ${claimVideoAttributes(src)} controls preload="metadata" aria-label="Video del reclamo"></video>`
-        : src ? `<img src="${esc(src)}" alt="Imagen ${selected + 1} del reclamo">` : icon(catMeta(claim.categoria).icon, 64)}
+        : src ? `<button type="button" class="claim-gallery-open" data-zoom-src="${esc(src)}" data-zoom-alt="Imagen ${selected + 1} del reclamo" aria-label="Ampliar imagen del reclamo">
+            <img class="claim-gallery-img" src="${esc(src)}" alt="Imagen ${selected + 1} del reclamo">
+            <span class="claim-gallery-zoom" aria-hidden="true">${icon("expand", 16)} Ampliar</span>
+          </button>`
+          : icon(catMeta(claim.categoria).icon, 64)}
       </div>
     </div>
     ${ownsClaim(claim) ? `<div class="claim-gallery-actions">

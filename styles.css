@@ -1451,14 +1451,17 @@
 /* Galería de adjuntos: miniaturas independientes de la imagen principal. */
 .claim-gallery { min-width: 0; }
 .claim-gallery-layout { display: grid; grid-template-columns: 58px minmax(0, 1fr); gap: 12px; align-items: start; }
-.claim-gallery-thumbs { display: flex; flex-direction: column; gap: 9px; max-height: 490px; overflow: auto; padding: 2px; }
+.claim-gallery-thumbs { display: flex; flex-direction: column; gap: 9px; max-height: 340px; overflow: auto; padding: 2px; }
 .claim-gallery-thumb { position: relative; flex: 0 0 54px; width: 54px; height: 54px; padding: 3px; border: 1px solid #bac7c0; border-radius: 7px; background: white; cursor: pointer; transition: border-color .18s, transform .18s; }
 .claim-gallery-thumb img { width: 100%; height: 100%; object-fit: cover; border-radius: 3px; }
 .claim-gallery-thumb[aria-pressed="true"] { border: 2px solid #137d70; padding: 2px; }
 .claim-gallery-thumb:hover { transform: translateY(-2px); }
 .claim-gallery-thumb:focus-visible { outline: 3px solid #137d70; outline-offset: 2px; }
-.claim-gallery-main { display: grid; place-items: center; min-width: 0; height: clamp(280px, 40vw, 490px); background: #f4f5f2; border-radius: 12px; overflow: hidden; }
-.claim-gallery-main > img, .claim-gallery-main > video { width: 100%; height: 100%; min-height: 0; object-fit: contain; animation: gallery-appear .2s ease-out; }
+.claim-gallery-main { position: relative; display: grid; place-items: center; min-width: 0; width: 100%; aspect-ratio: 4 / 3; max-height: 340px; background: #f4f5f2; border-radius: 12px; overflow: hidden; }
+.claim-gallery-open { display: block; width: 100%; height: 100%; padding: 0; border: 0; background: none; cursor: zoom-in; }
+.claim-gallery-open:focus-visible { outline: 3px solid #137d70; outline-offset: -3px; }
+.claim-gallery-main > img, .claim-gallery-main > video, .claim-gallery-open img { width: 100%; height: 100%; min-height: 0; object-fit: contain; animation: gallery-appear .2s ease-out; }
+.claim-gallery-zoom { position: absolute; right: 10px; bottom: 10px; display: inline-flex; align-items: center; gap: 5px; padding: 5px 10px; border-radius: 999px; background: rgba(15,23,42,.62); color: #fff; font-size: .74rem; font-weight: 700; pointer-events: none; backdrop-filter: blur(3px); }
 .claim-gallery-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
 .gallery-upload { position: relative; overflow: hidden; cursor: pointer; }
 .gallery-upload input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
@@ -1468,6 +1471,18 @@
 @media (max-width: 600px) {
   .claim-gallery-layout { grid-template-columns: 46px minmax(0, 1fr); gap: 8px; }
   .claim-gallery-thumb { width: 42px; height: 46px; flex-basis: 46px; }
-  .claim-gallery-main { height: 330px; }
+  .claim-gallery-main { aspect-ratio: 4 / 3; max-height: 300px; }
+  .claim-gallery-thumbs { max-height: 300px; }
 }
-@media (prefers-reduced-motion: reduce) { .claim-gallery-main > img, .claim-gallery-main > video { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .claim-gallery-main > img, .claim-gallery-main > video, .claim-gallery-open img { animation: none; } }
+
+/* Ampliar foto del reclamo a pantalla completa. */
+.media-zoom { position: fixed; inset: 0; z-index: 320; display: grid; place-items: center; padding: 20px; background: rgba(8, 15, 20, .88); backdrop-filter: blur(3px); cursor: zoom-out; animation: media-zoom-in .18s ease-out; }
+.media-zoom img { max-width: min(1280px, 95vw); max-height: 88vh; width: auto; height: auto; object-fit: contain; border-radius: 10px; box-shadow: 0 20px 60px rgba(0, 0, 0, .55); cursor: default; animation: media-zoom-img .2s ease-out; }
+.media-zoom-close { position: fixed; top: 16px; right: 18px; display: grid; place-items: center; width: 46px; height: 46px; border: 0; border-radius: 50%; background: rgba(255, 255, 255, .16); color: #fff; cursor: pointer; transition: background .15s; }
+.media-zoom-close:hover { background: rgba(255, 255, 255, .32); }
+.media-zoom-close:focus-visible { outline: 3px solid #fff; outline-offset: 2px; }
+body.media-zoom-open { overflow: hidden; }
+@keyframes media-zoom-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes media-zoom-img { from { opacity: .35; transform: scale(.95); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .media-zoom, .media-zoom img { animation: none; } }

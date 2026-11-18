@@ -70,6 +70,7 @@ const ICONS = {
   flag: '<path d="M5 21V4"/><path d="M5 5h13l-2.6 4.5L18 14H5"/>',
   play: '<circle cx="12" cy="12" r="9"/><path d="M10 8.5l6 3.5-6 3.5z"/>',
   info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v5"/><path d="M12 8h.01"/>',
+  expand: '<path d="M15 3h6v6"/><path d="M9 21H3v-6"/><path d="M21 3l-7 7"/><path d="M3 21l7-7"/>',
 };
 
 function icon(name, size = 20, stroke = 2) {
@@ -251,6 +252,17 @@ function fmtDate(iso) {
   if (isNaN(d)) return iso;
   return `${d.getDate()} ${MESES[d.getMonth()]} ${d.getFullYear()}`;
 }
+// Edad en años cumplidos a partir de una fecha ISO (YYYY-MM-DD).
+function ageFromDate(iso) {
+  const birth = new Date(iso + "T00:00:00");
+  if (isNaN(birth)) return NaN;
+  const today = new Date();
+  let age = today.getFullYear() - birth.getFullYear();
+  const monthDiff = today.getMonth() - birth.getMonth();
+  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) age--;
+  return age;
+}
+const MIN_AGE = 18;
 function catMeta(key) { return REPORT_CATEGORIES[key] || { label: key, color: "#64748b", icon: "pin" }; }
 function catChip(key) { const c = catMeta(key); return `<span class="chip" style="--c:${c.color}"><span class="sw"></span>${esc(c.label)}</span>`; }
 function statusBadge(e) { return `<span class="badge badge-${e}">${ESTADOS[e] || e}</span>`; }
@@ -836,6 +848,38 @@ function moveCarousel(carousel, delta) {
   showCarouselSlide(carousel, current + delta);
 }
 
+/* Ampliar una foto del reclamo a pantalla completa. */
+function openMediaZoom(src, alt = "") {
+  if (!src) return;
+  closeMediaZoom();
+  const overlay = document.createElement("div");
+  overlay.className = "media-zoom";
+  overlay.id = "mediaZoom";
+  overlay.setAttribute("role", "dialog");
+  overlay.setAttribute("aria-modal", "true");
+  overlay.setAttribute("aria-label", "Imagen ampliada del reclamo");
+  overlay.innerHTML = `<button type="button" class="media-zoom-close" aria-label="Cerrar imagen ampliada">${icon("close", 26)}</button><img src="${esc(src)}" alt="${esc(alt)}">`;
+  overlay.addEventListener("click", (event) => {
+    if (event.target === overlay || event.target.closest(".media-zoom-close")) closeMediaZoom();
+  });
+  document.body.append(overlay);
+  document.body.classList.add("media-zoom-open");
+  overlay.querySelector(".media-zoom-close").focus({ preventScroll: true });
+}
+function closeMediaZoom() {
+  const overlay = document.getElementById("mediaZoom");
+  if (!overlay) return;
+  overlay.remove();
+  document.body.classList.remove("media-zoom-open");
+}
+document.addEventListener("click", (event) => {
+  const trigger = event.target.closest("[data-zoom-src]");
+  if (trigger) openMediaZoom(trigger.dataset.zoomSrc, trigger.dataset.zoomAlt || "");
+});
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && document.getElementById("mediaZoom")) { closeMediaZoom(); event.stopPropagation(); }
+}, true);
+
 function renderReclamo(id) {
   const c = getClaim(id);
   if (!c) return `<section class="section"><div class="container"><div class="empty"><p style="font-weight:700;color:var(--ink)">Reclamo no encontrado</p><a class="btn btn-ghost" href="#/reclamos" style="margin-top:12px">Volver a reclamos</a></div></div></section>`;
@@ -1031,8 +1075,12 @@ function renderRegistro() {
           <div class="field"><label for="remail2">Confirmar email</label><input class="input" id="remail2" name="email2" type="email" required></div>
         </div>
         <div class="row2">
-          <div class="field"><label for="fnac">Fecha de nacimiento</label><input class="input" id="fnac" name="nacimiento" type="date" required></div>
-          <div class="field"><label for="fcel">Celular</label><input class="input" id="fcel" name="celular" type="tel" autocomplete="tel" placeholder="11 1234-5678"></div>
+          <div class="field"><label for="fnac">Fecha de nacimiento</label>
+            <input class="input" id="fnac" name="nacimiento" type="date" required aria-describedby="fnac-help">
+            <small class="hint" id="fnac-help">Tenés que tener al menos ${MIN_AGE} años.</small></div>
+          <div class="field"><label for="fcel">Celular</label>
+            <input class="input" id="fcel" name="celular" type="tel" inputmode="numeric" autocomplete="tel" maxlength="14" placeholder="11 1234-5678" aria-describedby="fcel-help">
+            <small class="hint" id="fcel-help">Opcional. Si lo cargás, tiene que tener 10 números.</small></div>
         </div>
         <div class="field"><label for="rbarrio">Barrio</label>
           <select class="input" id="rbarrio" name="barrio" required>
@@ -2403,6 +2451,23 @@ document.addEventListener("submit", async (e) => {
       form.querySelector('[name="barrio"]')?.focus();
       return;
     }
+    const nacimiento = String(data.get("nacimiento") || "").trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(nacimiento)) {
+      toast("Ingresá tu fecha de nacimiento.");
+      flagInvalid(form.elements.nacimiento);
+      return;
+    }
+    if (ageFromDate(nacimiento) < MIN_AGE) {
+      toast(`Tenés que tener al menos ${MIN_AGE} años para registrarte.`);
+      flagInvalid(form.elements.nacimiento);
+      return;
+    }
+    const celular = String(data.get("celular") || "").replace(/\D/g, "");
+    if (celular && celular.length !== 10) {
+      toast("Ingresá tu celular con 10 números.");
+      flagInvalid(form.elements.celular);
+      return;
+    }
     const dniDemo = String(data.get("dni") || "").trim().toUpperCase();
     const tramiteDemo = String(data.get("tramite") || "").trim().toUpperCase();
     if (email.toLowerCase() === DEMO_NEIGHBOR_EMAIL || dniDemo === "00000001") {
@@ -2430,7 +2495,7 @@ document.addEventListener("submit", async (e) => {
         return;
       }
       if (!validateUsername(usuario)) return;
-      loginDemo(email, nombre, { nombre, usuario, barrio, dniDemo, tramiteDemo, identityPassword: { salt, hash }, celular: String(data.get("celular") || "").trim() });
+      loginDemo(email, nombre, { nombre, usuario, barrio, dniDemo, tramiteDemo, nacimiento, celular, identityPassword: { salt, hash } });
     } catch {
       toast("No se pudo preparar la consulta de documentos.");
     } finally {
