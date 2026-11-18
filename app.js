@@ -2297,7 +2297,10 @@ document.addEventListener("click", (e) => {
   }
   if (t.closest('[data-action="logout"]')) {
     try { sessionStorage.removeItem(SESSION_KEY); } catch { /* storage may be unavailable */ }
-    state.session = { logged: false, email: "", nombre: "" }; save(); render(); toast("Cerraste sesión."); return; }
+    state.session = { logged: false, email: "", nombre: "" }; save();
+    // Al cerrar sesión no se puede seguir viendo el reclamo: se vuelve al inicio, ya sin cuenta.
+    location.hash = "#/";
+    render(); toast("Cerraste sesión."); return; }
   if (t.closest('[data-action="forgot"]')) { toast("La recuperación por correo no está habilitada."); return; }
   if (t.closest('[data-action="mark-all"]')) { accountNotifications().forEach((n) => (n.leida = true)); save(); render(); toast("Notificaciones marcadas como leídas."); return; }
 
