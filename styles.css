@@ -1318,7 +1318,10 @@
    .claim-media-item{display:flex;align-items:center;gap:10px;padding:7px 10px;border:1px solid #e2ebe5;border-radius:11px;background:#fbfdfb;min-width:0}
    .claim-media-item img{width:44px;height:44px;border-radius:8px;object-fit:cover;flex:none;background:#edf2ef}
    .claim-media-video{width:44px;height:44px;border-radius:8px;flex:none;display:grid;place-items:center;color:#168254;background:#e8f4e9}
-   .claim-media-name{font-size:.76rem;color:#53665c;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+   .claim-media-name{font-size:.76rem;color:#53665c;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;flex:1}
+   .claim-media-remove{display:grid;place-items:center;flex:none;width:32px;height:32px;padding:0;border:1px solid var(--line);border-radius:50%;background:white;color:#a52f35;font-size:23px;line-height:1;transition:background .18s,transform .18s}
+   .claim-media-remove:hover{background:#fff0ef;transform:scale(1.08)}
+   .claim-media-remove:focus-visible{outline:2px solid var(--primary);outline-offset:2px}
    .claim-form-actions{display:flex;justify-content:space-between;align-items:center;margin-top:22px}
    .claim-form-actions .btn{padding:11px 19px}
    .claim-side{display:grid;gap:16px}

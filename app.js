@@ -1963,8 +1963,28 @@ async function readClaimMedia(files) {
   return { fotos, video };
 }
 
-function updateClaimMediaPreview(input) {
-  const files = [...(input.files || [])];
+const claimUploadSelections = new WeakMap();
+
+function syncClaimUploadFiles(input, files) {
+  const transfer = new DataTransfer();
+  files.forEach(file => transfer.items.add(file));
+  input.files = transfer.files;
+  claimUploadSelections.set(input, files);
+}
+
+function updateClaimMediaPreview(input, append = true) {
+  const previous = claimUploadSelections.get(input) || [];
+  let files = previous;
+  if (append) {
+    const selected = [...(input.files || [])];
+    files = [...previous];
+    selected.forEach(file => {
+      if (!files.some(existing => existing.name === file.name && existing.size === file.size
+        && existing.type === file.type && existing.lastModified === file.lastModified)) files.push(file);
+    });
+    if (!validateClaimFiles(files)) files = previous;
+  }
+  syncClaimUploadFiles(input, files);
   const name = document.getElementById("uploadName");
   const list = document.getElementById("claimMediaPreview");
   if (name) {
@@ -1975,7 +1995,7 @@ function updateClaimMediaPreview(input) {
   if (!list) return;
   list.replaceChildren();
   list.hidden = !files.length;
-  files.forEach((file) => {
+  files.forEach((file, index) => {
     const item = document.createElement("li");
     item.className = "claim-media-item";
     if (file.type.startsWith("image/")) {
@@ -1994,9 +2014,29 @@ function updateClaimMediaPreview(input) {
     label.className = "claim-media-name";
     label.textContent = file.name;
     item.append(label);
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.className = "claim-media-remove";
+    remove.dataset.removeClaimUpload = index;
+    remove.setAttribute("aria-label", `Quitar ${file.name}`);
+    remove.textContent = "×";
+    item.append(remove);
     list.append(item);
   });
 }
+
+document.addEventListener("click", event => {
+  const remove = event.target.closest("[data-remove-claim-upload]");
+  if (!remove) return;
+  const input = remove.closest("form")?.querySelector('input[name="foto"]');
+  if (!input) return;
+  const index = Number(remove.dataset.removeClaimUpload);
+  const files = (claimUploadSelections.get(input) || []).filter((_, i) => i !== index);
+  syncClaimUploadFiles(input, files);
+  updateClaimMediaPreview(input, false);
+  const next = document.querySelectorAll("[data-remove-claim-upload]");
+  (next[Math.min(index, next.length - 1)] || input).focus({ preventScroll: true });
+});
 
 const chartTooltip = document.getElementById("chart-tooltip");
 let chartTarget;
