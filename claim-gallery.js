@@ -1,0 +1,141 @@
+/* Adjuntos del reclamo. La primera foto también se usa en las listas y el mapa. */
+const pendingClaimUploads = new Set();
+
+function attachedClaimMedia(claim) {
+  return claimMediaItems(claim).map(item => item.src);
+}
+
+function validateClaimFiles(files, current = []) {
+  if (files.some(file => file.size > 1200000 || !/^(image|video)\//.test(file.type))) {
+    toast("Elegí imágenes o videos de hasta 1,2 MB por archivo."); return false;
+  }
+  const images = current.filter(src => !src.startsWith("data:video/")).length;
+  const videos = current.length - images;
+  if (images + files.filter(file => file.type.startsWith("image/")).length > CLAIM_MAX_PHOTOS
+    || videos + files.filter(file => file.type.startsWith("video/")).length > 1) {
+    toast("Podés adjuntar hasta 5 fotos y un video por reclamo."); return false;
+  }
+  return true;
+}
+
+function claimGallery(claim, selected = 0) {
+  const attached = attachedClaimMedia(claim);
+  const reference = referencePhoto(claim);
+  const media = attached.length && !claim.demo ? attached : reference ? [reference.src] : attached;
+  selected = Math.max(0, Math.min(selected, media.length - 1));
+  const src = media[selected] || "";
+  const video = src.startsWith("data:video/");
+  const images = attached.filter((item) => !item.startsWith("data:video/")).length;
+  const canDelete = ownsClaim(claim) && attached.includes(src)
+    && (video ? attached.length > 1 : images > 1);
+  return `<div class="claim-gallery" data-gallery-id="${esc(claim.id)}" data-selected="${selected}">
+    <div class="claim-gallery-layout">
+      ${media.length ? `<div class="claim-gallery-thumbs" role="group" aria-label="Adjuntos del reclamo">
+        ${media.map((item, index) => `<button type="button" class="claim-gallery-thumb" data-gallery-select="${index}"
+          aria-label="${item.startsWith("data:video/") ? "Ver video" : "Ver imagen"} ${index + 1}"
+          aria-pressed="${index === selected}">${item.startsWith("data:video/")
+            ? icon("camera", 22) + '<span aria-hidden="true">▶</span>'
+            : `<img src="${esc(item)}" alt="" loading="lazy">`}</button>`).join("")}
+      </div>` : ""}
+      <div class="claim-gallery-main">${video
+        ? `<video src="${esc(src)}" controls preload="metadata" aria-label="Video del reclamo"></video>`
+        : src ? `<img src="${esc(src)}" alt="Imagen ${selected + 1} del reclamo">` : icon(catMeta(claim.categoria).icon, 64)}
+      </div>
+    </div>
+    ${ownsClaim(claim) ? `<div class="claim-gallery-actions">
+      <label class="btn btn-ghost btn-sm gallery-upload">${icon("plus", 16)} Agregar fotos o videos
+        <input type="file" data-gallery-add multiple accept="image/*,video/*" aria-label="Agregar fotos o videos"
+          ${pendingClaimUploads.has(claim.id) ? "disabled" : ""}>
+      </label>
+      ${attached.length ? `<button type="button" class="btn btn-ghost btn-sm" data-gallery-delete
+        ${canDelete && !pendingClaimUploads.has(claim.id) ? "" : "disabled"}>${icon("limpieza", 16)} Borrar adjunto</button>` : ""}
+    </div><p class="hint">Hasta 5 fotos y 1 video · 1,2 MB por archivo. Conservá al menos una imagen.</p>` : ""}
+  </div>`;
+}
+
+function replaceClaimGallery(container, claim, selected) {
+  container.outerHTML = claimGallery(claim, selected);
+}
+
+function selectClaimMedia(button) {
+  const container = button.closest("[data-gallery-id]");
+  const claim = getClaim(container.dataset.galleryId);
+  if (!claim || pendingClaimUploads.has(claim.id)) return;
+  const index = Number(button.dataset.gallerySelect);
+  if (index === Number(container.dataset.selected)) return;
+  const focus = document.activeElement === button;
+  replaceClaimGallery(container, claim, index);
+  if (focus) document.querySelector(`[data-gallery-select="${index}"]`)?.focus({ preventScroll: true });
+}
+
+function saveClaimMedia(claim, media) {
+  const old = { fotos: claim.fotos, foto: claim.foto, video: claim.video };
+  claim.fotos = media.filter(src => !src.startsWith("data:video/"));
+  claim.video = media.find(src => src.startsWith("data:video/")) || "";
+  claim.foto = claim.fotos[0] || claim.video || "";
+  try {
+    persist();
+    return true;
+  } catch {
+    if (old.fotos === undefined) delete claim.fotos;
+    else claim.fotos = old.fotos;
+    claim.foto = old.foto;
+    claim.video = old.video;
+    toast("No se pudieron guardar los adjuntos. Probá con archivos más chicos.");
+    return false;
+  }
+}
+
+document.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-gallery-select]");
+  if (button) { selectClaimMedia(button); return; }
+  const remove = event.target.closest("[data-gallery-delete]");
+  if (!remove || remove.disabled) return;
+  const container = remove.closest("[data-gallery-id]");
+  const claim = getClaim(container.dataset.galleryId);
+  if (!ownsClaim(claim) || pendingClaimUploads.has(claim.id)) return;
+  const attached = attachedClaimMedia(claim);
+  const selected = Number(container.dataset.selected);
+  const remaining = attached.filter((_, index) => index !== selected);
+  if (remaining.length === attached.length || !remaining.some((src) => !src.startsWith("data:video/"))) return;
+  if (!confirm("¿Borrar este adjunto del reclamo?")) return;
+  if (saveClaimMedia(claim, remaining)) {
+    replaceClaimGallery(container, claim, Math.min(selected, remaining.length - 1));
+    toast("Adjunto eliminado.");
+  }
+});
+
+document.addEventListener("pointerover", (event) => {
+  const button = event.target.closest("[data-gallery-select]");
+  if (button && event.pointerType === "mouse") selectClaimMedia(button);
+});
+
+document.addEventListener("change", async (event) => {
+  const input = event.target.closest("[data-gallery-add]");
+  if (!input) return;
+  const container = input.closest("[data-gallery-id]");
+  const claim = getClaim(container.dataset.galleryId);
+  const files = Array.from(input.files);
+  input.value = "";
+  if (!files.length || !ownsClaim(claim) || pendingClaimUploads.has(claim.id)) return;
+  const previous = attachedClaimMedia(claim);
+  if (!validateClaimFiles(files, previous)) return;
+  pendingClaimUploads.add(claim.id);
+  input.disabled = true;
+  try {
+    const result = await readClaimMedia(files);
+    const added = [...result.fotos, ...(result.video ? [result.video] : [])];
+    if (!container.isConnected || !ownsClaim(claim) || getClaim(claim.id) !== claim) return;
+    if (added.length !== files.length) { toast("No se pudo leer uno de los archivos."); return; }
+    if (saveClaimMedia(claim, [...previous, ...added])) {
+      pendingClaimUploads.delete(claim.id);
+      replaceClaimGallery(container, claim, previous.length);
+      toast("Adjuntos guardados.");
+    }
+  } catch {
+    toast("No se pudieron procesar los adjuntos. Intentá nuevamente.");
+  } finally {
+    pendingClaimUploads.delete(claim.id);
+    input.disabled = false;
+  }
+});

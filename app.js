@@ -882,7 +882,7 @@ function renderReclamo(id) {
               <span style="display:inline-flex;align-items:center;gap:6px">${icon("doc", 16)} N° ${esc(c.numero || "")}</span>
             </div>
             <div class="claim-detail-intro">
-              <div><div class="media-frame${media.hasMedia ? " has-media" : ""}" style="--c:${cat.color}">${media.html}</div></div>
+              <div>${claimGallery(c)}</div>
               <div><h2>Descripción</h2><p class="detail-desc">${esc(c.descripcion)}</p>
                 <div class="support-box">
                   <div class="big">${c.apoyos}</div><div class="lbl">apoyos de vecinos</div>
