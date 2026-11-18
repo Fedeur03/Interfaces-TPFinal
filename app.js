@@ -1043,18 +1043,17 @@ function renderRegistro() {
         <div class="row2">
         <div class="field">
           <label for="rdni">DNI</label>
-          <input class="input" id="rdni" name="dni" required maxlength="13" autocomplete="off" spellcheck="false"
-            pattern="[Dd][Ee][Mm][Oo]\\x2D[0-9]{8}" placeholder="DEMO-12345678" aria-describedby="rdni-help identity-help">
+          <input class="input" id="rdni" name="dni" required minlength="7" maxlength="8" inputmode="numeric" autocomplete="off" spellcheck="false"
+            pattern="[0-9]{7,8}" placeholder="12345678" aria-describedby="rdni-help">
           <small class="hint" id="rdni-help">Es el número de documento que figura en tu DNI.</small>
         </div>
         <div class="field">
           <label for="rtramite">Número de trámite</label>
-          <input class="input" id="rtramite" name="tramite" required maxlength="16" autocomplete="off" spellcheck="false"
-            pattern="[Dd][Ee][Mm][Oo]\\x2D[0-9]{11}" placeholder="DEMO-12345678901" aria-describedby="rtramite-help identity-help">
+          <input class="input" id="rtramite" name="tramite" required minlength="11" maxlength="11" inputmode="numeric" autocomplete="off" spellcheck="false"
+            pattern="[0-9]{11}" placeholder="12345678901" aria-describedby="rtramite-help">
           <small class="hint" id="rtramite-help">Buscá el número de 11 dígitos identificado como «Trámite».</small>
         </div>
         </div>
-        <p class="hint" id="identity-help">Para este registro, usá los formatos de ejemplo con el prefijo DEMO- y números inventados.</p>
         <div class="row2">
           <div class="field"><label for="rpass">Contraseña</label><input class="input" id="rpass" name="password" type="password" autocomplete="new-password" required minlength="6"></div>
           <div class="field"><label for="rpass2">Confirmar contraseña</label><input class="input" id="rpass2" name="password2" type="password" autocomplete="new-password" required minlength="6"></div>
@@ -2366,19 +2365,19 @@ document.addEventListener("submit", async (e) => {
     }
     const dniDemo = String(data.get("dni") || "").trim().toUpperCase();
     const tramiteDemo = String(data.get("tramite") || "").trim().toUpperCase();
-    if (email.toLowerCase() === DEMO_NEIGHBOR_EMAIL || dniDemo === "DEMO-00000001") {
+    if (email.toLowerCase() === DEMO_NEIGHBOR_EMAIL || dniDemo === "00000001") {
       toast("Ese correo o DNI está reservado para la cuenta Vecino.");
       return;
     }
     if (email !== email2) { toast("Los emails no coinciden."); return; }
     if (pass !== pass2) { toast("Las contraseñas no coinciden."); return; }
     if (pass.length < 6) { toast("La contraseña debe tener al menos 6 caracteres."); return; }
-    if (!/^DEMO-[0-9]{8}$/.test(dniDemo)) { toast("Ingresá un DNI de prueba con el formato DEMO-12345678."); return; }
-    if (!/^DEMO-[0-9]{11}$/.test(tramiteDemo)) { toast("Ingresá un número de trámite de prueba con el formato DEMO-12345678901."); return; }
+    if (!/^[0-9]{7,8}$/.test(dniDemo)) { toast("Ingresá tu DNI con 7 u 8 dígitos, sin puntos ni espacios."); return; }
+    if (!/^[0-9]{11}$/.test(tramiteDemo)) { toast("Ingresá los 11 dígitos del número de trámite."); return; }
     const profile = state.profiles.find((item) => item.email.toLowerCase() === email.toLowerCase());
     if (profile?.identityPassword) { toast("Ese correo ya está registrado."); return; }
-    if (profile?.dniDemo && profile.dniDemo !== dniDemo) { toast("Ingresá el DNI de prueba asociado a esta cuenta."); return; }
-    if (state.profiles.some((item) => item !== profile && item.dniDemo === dniDemo)) { toast("Ese DNI de prueba ya está en uso en este navegador."); return; }
+    if (profile?.dniDemo && String(profile.dniDemo).replace(/^DEMO-/i, "") !== dniDemo) { toast("Ingresá el DNI asociado a esta cuenta."); return; }
+    if (state.profiles.some((item) => item !== profile && String(item.dniDemo || "").replace(/^DEMO-/i, "") === dniDemo)) { toast("Ese DNI ya está en uso en este navegador."); return; }
     const submit = form.querySelector('button[type="submit"]');
     if (submit.disabled) return;
     submit.disabled = true;
@@ -2386,8 +2385,8 @@ document.addEventListener("submit", async (e) => {
       const salt = Array.from(crypto.getRandomValues(new Uint8Array(16)));
       const hash = await identityPasswordHash(pass, salt);
       if (!form.isConnected) return;
-      if (state.profiles.some((item) => item !== profile && (item.email.toLowerCase() === email.toLowerCase() || item.dniDemo === dniDemo))) {
-        toast("El correo o el DNI de prueba ya está registrado.");
+      if (state.profiles.some((item) => item !== profile && (item.email.toLowerCase() === email.toLowerCase() || String(item.dniDemo || "").replace(/^DEMO-/i, "") === dniDemo))) {
+        toast("El correo o el DNI ya está registrado.");
         return;
       }
       if (!validateUsername(usuario)) return;
