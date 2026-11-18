@@ -1061,7 +1061,7 @@ function renderRegistro() {
   return `<section class="section"><div class="container"><div class="auth-wrap register-wrap"><div class="auth-card">
     <div class="view-heading"><h1>Registrarse</h1><p class="sub">Creá tu cuenta vecinal para publicar, apoyar y seguir reclamos.</p></div>
     <div class="register-grid">
-      <form data-form="registro">
+      <form data-form="registro" id="registro-form">
         <div class="row2">
           <div class="field"><label for="rnombre">Nombre y apellido</label>
             <input class="input" id="rnombre" name="nombre" autocomplete="name" maxlength="100" required></div>
@@ -1107,10 +1107,10 @@ function renderRegistro() {
           <div class="field"><label for="rpass2">Confirmar contraseña</label><input class="input" id="rpass2" name="password2" type="password" autocomplete="new-password" required minlength="6"></div>
         </div>
         <label class="remember-login"><input type="checkbox" required> <span>Acepto los <a href="#/terminos">términos y condiciones</a>.</span></label>
-        <div class="view-actions"><button class="btn btn-primary" type="submit">Crear cuenta</button></div>
       </form>
       <div class="register-social">${socialOptions()}</div>
     </div>
+    <div class="view-actions"><button class="btn btn-primary" type="submit" form="registro-form">Crear cuenta</button></div>
     <p class="auth-foot">¿Ya tenés cuenta? <a href="${authLink("login")}">Iniciar sesión</a></p>
   </div></div></div></section>`;
 }
@@ -2483,9 +2483,9 @@ document.addEventListener("submit", async (e) => {
     if (profile?.identityPassword) { toast("Ese correo ya está registrado."); return; }
     if (profile?.dniDemo && String(profile.dniDemo).replace(/^DEMO-/i, "") !== dniDemo) { toast("Ingresá el DNI asociado a esta cuenta."); return; }
     if (state.profiles.some((item) => item !== profile && String(item.dniDemo || "").replace(/^DEMO-/i, "") === dniDemo)) { toast("Ese DNI ya está en uso en este navegador."); return; }
-    const submit = form.querySelector('button[type="submit"]');
-    if (submit.disabled) return;
-    submit.disabled = true;
+    const submit = form.querySelector('button[type="submit"]') || (form.id ? document.querySelector(`button[type="submit"][form="${form.id}"]`) : null);
+    if (submit?.disabled) return;
+    if (submit) submit.disabled = true;
     try {
       const salt = Array.from(crypto.getRandomValues(new Uint8Array(16)));
       const hash = await identityPasswordHash(pass, salt);
@@ -2499,7 +2499,7 @@ document.addEventListener("submit", async (e) => {
     } catch {
       toast("No se pudo preparar la consulta de documentos.");
     } finally {
-      submit.disabled = false;
+      if (submit) submit.disabled = false;
     }
     return;
   }
