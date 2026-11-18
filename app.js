@@ -53,6 +53,7 @@ const ICONS = {
   search: '<circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/>',
   arrow: '<path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/>',
   chevron: '<path d="M9 6l6 6-6 6"/>',
+  "chevron-left": '<path d="M15 6l-6 6 6 6"/>',
   doc: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8"/><path d="M8 17h5"/>',
   building: '<path d="M3 21h18"/><path d="M5 21V5a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v16"/><path d="M15 21V9h2a2 2 0 0 1 2 2v10"/><path d="M9 7h2"/><path d="M9 11h2"/><path d="M9 15h2"/>',
   users: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 21a6.5 6.5 0 0 1 13 0"/><path d="M17 5.5a3 3 0 0 1 0 5.8"/><path d="M19 21a6.5 6.5 0 0 0-3.5-5.8"/>',
@@ -848,22 +849,50 @@ function moveCarousel(carousel, delta) {
   showCarouselSlide(carousel, current + delta);
 }
 
-/* Ampliar una foto del reclamo a pantalla completa. */
-function openMediaZoom(src, alt = "") {
+/* Ampliar un adjunto del reclamo a pantalla completa, con navegación entre fotos y videos. */
+let mediaZoomItems = [];
+let mediaZoomIndex = 0;
+function mediaZoomShow(index) {
+  const overlay = document.getElementById("mediaZoom");
+  if (!overlay || !mediaZoomItems.length) return;
+  mediaZoomIndex = (index + mediaZoomItems.length) % mediaZoomItems.length;
+  const src = mediaZoomItems[mediaZoomIndex];
+  const stage = overlay.querySelector(".media-zoom-stage");
+  if (stage) {
+    stage.innerHTML = src.startsWith("data:video/")
+      ? `<video class="media-zoom-video" ${claimVideoAttributes(src)} controls preload="metadata" playsinline aria-label="Video del reclamo"></video>`
+      : `<img class="media-zoom-img" src="${esc(src)}" alt="Adjunto ${mediaZoomIndex + 1} del reclamo">`;
+  }
+  const count = overlay.querySelector(".media-zoom-count");
+  if (count) count.textContent = `${mediaZoomIndex + 1} / ${mediaZoomItems.length}`;
+}
+function openMediaZoom(src, galleryId = "") {
   if (!src) return;
   closeMediaZoom();
+  const claim = galleryId ? getClaim(galleryId) : null;
+  const items = claim ? claimGalleryMedia(claim) : [];
+  mediaZoomItems = items.includes(src) ? items : [src];
+  mediaZoomIndex = Math.max(0, mediaZoomItems.indexOf(src));
+  const multiple = mediaZoomItems.length > 1;
   const overlay = document.createElement("div");
   overlay.className = "media-zoom";
   overlay.id = "mediaZoom";
   overlay.setAttribute("role", "dialog");
   overlay.setAttribute("aria-modal", "true");
-  overlay.setAttribute("aria-label", "Imagen ampliada del reclamo");
-  overlay.innerHTML = `<button type="button" class="media-zoom-close" aria-label="Cerrar imagen ampliada">${icon("close", 26)}</button><img src="${esc(src)}" alt="${esc(alt)}">`;
+  overlay.setAttribute("aria-label", "Adjunto ampliado del reclamo");
+  overlay.innerHTML = `<button type="button" class="media-zoom-close" aria-label="Cerrar adjunto ampliado">${icon("close", 26)}</button>
+    ${multiple ? `<button type="button" class="media-zoom-nav prev" data-zoom-step="-1" aria-label="Adjunto anterior">${icon("chevron-left", 28)}</button>` : ""}
+    <div class="media-zoom-stage"></div>
+    ${multiple ? `<button type="button" class="media-zoom-nav next" data-zoom-step="1" aria-label="Adjunto siguiente">${icon("chevron", 28)}</button>
+    <span class="media-zoom-count" aria-hidden="true"></span>` : ""}`;
   overlay.addEventListener("click", (event) => {
-    if (event.target === overlay || event.target.closest(".media-zoom-close")) closeMediaZoom();
+    if (event.target === overlay || event.target.classList.contains("media-zoom-stage") || event.target.closest(".media-zoom-close")) { closeMediaZoom(); return; }
+    const step = event.target.closest("[data-zoom-step]");
+    if (step) mediaZoomShow(mediaZoomIndex + Number(step.dataset.zoomStep));
   });
   document.body.append(overlay);
   document.body.classList.add("media-zoom-open");
+  mediaZoomShow(mediaZoomIndex);
   overlay.querySelector(".media-zoom-close").focus({ preventScroll: true });
 }
 function closeMediaZoom() {
@@ -871,13 +900,21 @@ function closeMediaZoom() {
   if (!overlay) return;
   overlay.remove();
   document.body.classList.remove("media-zoom-open");
+  mediaZoomItems = [];
+  mediaZoomIndex = 0;
 }
 document.addEventListener("click", (event) => {
   const trigger = event.target.closest("[data-zoom-src]");
-  if (trigger) openMediaZoom(trigger.dataset.zoomSrc, trigger.dataset.zoomAlt || "");
+  if (!trigger) return;
+  const gallery = trigger.closest("[data-gallery-id]");
+  openMediaZoom(trigger.dataset.zoomSrc, gallery ? gallery.dataset.galleryId : "");
 });
 document.addEventListener("keydown", (event) => {
-  if (event.key === "Escape" && document.getElementById("mediaZoom")) { closeMediaZoom(); event.stopPropagation(); }
+  const overlay = document.getElementById("mediaZoom");
+  if (!overlay) return;
+  if (event.key === "Escape") { closeMediaZoom(); event.stopPropagation(); }
+  else if (event.key === "ArrowLeft") { mediaZoomShow(mediaZoomIndex - 1); event.preventDefault(); event.stopPropagation(); }
+  else if (event.key === "ArrowRight") { mediaZoomShow(mediaZoomIndex + 1); event.preventDefault(); event.stopPropagation(); }
 }, true);
 
 function renderReclamo(id) {

@@ -58,16 +58,23 @@ function validateClaimFiles(files, current = []) {
   return true;
 }
 
-function claimGallery(claim, selected = 0) {
+function claimGalleryMedia(claim) {
   const attached = attachedClaimMedia(claim);
   const reference = referencePhoto(claim);
-  const media = attached.length && !claim.demo ? attached : reference ? [reference.src] : attached;
+  return attached.length && !claim.demo ? attached : reference ? [reference.src] : attached;
+}
+
+function claimGallery(claim, selected = 0) {
+  const attached = attachedClaimMedia(claim);
+  const media = claimGalleryMedia(claim);
   selected = Math.max(0, Math.min(selected, media.length - 1));
   const src = media[selected] || "";
   const video = src.startsWith("data:video/");
   const images = attached.filter((item) => !item.startsWith("data:video/")).length;
   const canDelete = ownsClaim(claim) && attached.includes(src)
     && (video ? attached.length > 1 : images > 1);
+  const nav = media.length > 1 ? `<button type="button" class="claim-gallery-nav prev" data-gallery-step="-1" aria-label="Adjunto anterior">${icon("chevron-left", 22)}</button>
+          <button type="button" class="claim-gallery-nav next" data-gallery-step="1" aria-label="Adjunto siguiente">${icon("chevron", 22)}</button>` : "";
   return `<div class="claim-gallery" data-gallery-id="${esc(claim.id)}" data-selected="${selected}">
     <div class="claim-gallery-layout">
       ${media.length ? `<div class="claim-gallery-thumbs" role="group" aria-label="Adjuntos del reclamo">
@@ -79,11 +86,11 @@ function claimGallery(claim, selected = 0) {
       </div>` : ""}
       <div class="claim-gallery-main">${video
         ? `<video ${claimVideoAttributes(src)} controls preload="metadata" aria-label="Video del reclamo"></video>`
-        : src ? `<button type="button" class="claim-gallery-open" data-zoom-src="${esc(src)}" data-zoom-alt="Imagen ${selected + 1} del reclamo" aria-label="Ampliar imagen del reclamo">
-            <img class="claim-gallery-img" src="${esc(src)}" alt="Imagen ${selected + 1} del reclamo">
+        : src ? `<button type="button" class="claim-gallery-open" data-zoom-src="${esc(src)}" aria-label="Ampliar imagen del reclamo">
+            <img src="${esc(src)}" alt="Imagen ${selected + 1} del reclamo">
             <span class="claim-gallery-zoom" aria-hidden="true">${icon("expand", 16)} Ampliar</span>
           </button>`
-          : icon(catMeta(claim.categoria).icon, 64)}
+          : icon(catMeta(claim.categoria).icon, 64)}${nav}
       </div>
     </div>
     ${ownsClaim(claim) ? `<div class="claim-gallery-actions">
@@ -112,6 +119,21 @@ function selectClaimMedia(button) {
   if (focus) document.querySelector(`[data-gallery-select="${index}"]`)?.focus({ preventScroll: true });
 }
 
+function stepClaimMedia(button, delta) {
+  const container = button.closest("[data-gallery-id]");
+  if (!container) return;
+  const id = container.dataset.galleryId;
+  const claim = getClaim(id);
+  if (!claim || pendingClaimUploads.has(claim.id)) return;
+  const media = claimGalleryMedia(claim);
+  if (media.length < 2) return;
+  const current = Number(container.dataset.selected) || 0;
+  const next = (current + delta + media.length) % media.length;
+  const focus = document.activeElement === button;
+  replaceClaimGallery(container, claim, next);
+  if (focus) document.querySelector(`[data-gallery-id="${CSS.escape(id)}"] [data-gallery-step="${delta}"]`)?.focus({ preventScroll: true });
+}
+
 function saveClaimMedia(claim, media) {
   const old = { fotos: claim.fotos, foto: claim.foto, video: claim.video };
   claim.fotos = media.filter(src => !src.startsWith("data:video/"));
@@ -131,6 +153,8 @@ function saveClaimMedia(claim, media) {
 }
 
 document.addEventListener("click", (event) => {
+  const step = event.target.closest("[data-gallery-step]");
+  if (step) { stepClaimMedia(step, Number(step.dataset.galleryStep)); return; }
   const button = event.target.closest("[data-gallery-select]");
   if (button) { selectClaimMedia(button); return; }
   const remove = event.target.closest("[data-gallery-delete]");
