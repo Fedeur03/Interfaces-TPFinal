@@ -1008,9 +1008,11 @@ function renderReclamo(id) {
               <div><h2>Descripción</h2><p class="detail-desc">${esc(c.descripcion)}</p>
                 <div class="support-box">
                   <div class="big">${c.apoyos}</div><div class="lbl">apoyos de vecinos</div>
-                  ${ownsClaim(c)
-                    ? `<p class="support-own-note">${icon("info", 17)} No podés apoyar tu propio reclamo.</p>`
-                    : `<button class="btn ${supported ? "btn-ghost" : "btn-accent"} btn-block" data-action="support" data-id="${esc(c.id)}" ${supported ? "disabled" : ""}>${icon("support", 18)} ${supported ? "Ya apoyaste" : "Apoyar este reclamo"}</button>`}
+                  ${petition === "resuelto"
+                    ? `<p class="support-own-note">${icon("info", 17)} ${supported ? "Ya apoyaste este reclamo antes de que se resolviera." : "Problema ya resuelto. No se pueden sumar apoyos."}</p>`
+                    : ownsClaim(c)
+                      ? `<p class="support-own-note">${icon("info", 17)} No podés apoyar tu propio reclamo.</p>`
+                      : `<button class="btn ${supported ? "btn-ghost" : "btn-accent"} btn-block" data-action="support" data-id="${esc(c.id)}" ${supported ? "disabled" : ""}>${icon("support", 18)} ${supported ? "Ya apoyaste" : "Apoyar este reclamo"}</button>`}
                   <div style="width:100%;margin-top:4px"><div class="progress"><i style="width:${pct}%"></i></div><div style="display:flex;justify-content:space-between;font-size:.75rem;color:var(--muted);margin-top:6px"><span>${petition === "resuelto" ? "Problema ya resuelto" : petition === "enviada" ? "Carta enviada" : ready ? "Meta alcanzada" : "Petición colectiva"}</span><span>${c.apoyos}/${THRESHOLD}</span></div></div>
                   ${petition === "resuelto"
                     ? `<p class="hint" style="font-size:.77rem;margin:0">Problema ya resuelto. No corresponde enviar la carta.</p>`
@@ -1965,6 +1967,7 @@ function supportClaim(id) {
   if (!requireLogin(location.hash)) return;
   const c = getClaim(id);
   if (!c || ownSupports().includes(id)) return;
+  if (c.estado === "resuelto") { toast("El problema ya está resuelto. No podés apoyarlo."); return; }
   if (ownsClaim(c)) { toast("No podés apoyar tu propio reclamo."); return; }
   c.apoyos++;
   state.supported[state.session.email] = [...ownSupports(), id];
