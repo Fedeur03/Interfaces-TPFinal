@@ -698,6 +698,15 @@ function prioritizeClaims(list, compare) {
   return petitions.concat(rest);
 }
 
+function claimPriority(claim) {
+  return Object.hasOwn(PRIORIDADES, claim.prioridad) ? claim.prioridad : "media";
+}
+
+function priorityBadge(claim) {
+  const priority = claimPriority(claim);
+  return `<span class="badge badge-prio-${priority}">${icon("flag", 13)} Prioridad ${esc(PRIORIDADES[priority])}</span>${claim.prioridadVerificada ? `<span class="badge badge-verified">${icon("check", 13)} Prioridad verificada por el Municipio</span>` : ""}`;
+}
+
 function filteredClaims() {
   const { params } = getRoute();
   const cat = params.get("cat") || "todos";
@@ -706,6 +715,8 @@ function filteredClaims() {
   return prioritizeClaims(state.claims.filter((c) => {
     if (cat !== "todos" && c.categoria !== cat) return false;
     if (estado !== "todos" && c.estado !== estado) return false;
+    const prioridad = params.get("prioridad") || "todos";
+    if (prioridad !== "todos" && claimPriority(c) !== prioridad) return false;
     if (q && !`${c.titulo} ${c.descripcion} ${c.barrio} ${c.direccion}`.toLowerCase().includes(q)) return false;
     return true;
   }), (a, b) => b.apoyos - a.apoyos);
@@ -717,12 +728,12 @@ function renderReclamos() {
   const estado = params.get("estado") || "todos";
   const list = filteredClaims();
   const { page, count, navigation } = claimPagination(list, "reclamos", params);
-  const hasFilters = ["cat", "estado", "q"].some((key) => params.has(key));
+  const hasFilters = ["cat", "estado", "prioridad", "q"].some((key) => params.has(key));
   const catOpts = Object.entries(REPORT_CATEGORIES).map(([k, c]) => `<option value="${k}" ${cat === k ? "selected" : ""}>${c.label}</option>`).join("");
 
   return `
     <section class="section"><div class="container">
-      <div class="section-head"><div class="view-heading"><h1>Explorar reclamos</h1><p>Buscá por palabra, filtrá por categoría y estado, y apoyá los reclamos que te importan.</p></div><a class="btn btn-primary" href="#/crear">${icon("plus", 17)} Crear reclamo</a></div>
+      <div class="section-head"><div class="view-heading"><h1>Explorar reclamos</h1><p>Buscá por palabra, filtrá por categoría, estado y prioridad, y apoyá los reclamos que te importan.</p></div><a class="btn btn-primary" href="#/crear">${icon("plus", 17)} Crear reclamo</a></div>
       <div class="explore-layout">
         <form class="filter-panel" data-form="filters">
           <h3>Aplicar filtros</h3>
@@ -732,6 +743,10 @@ function renderReclamos() {
             <option value="abierto" ${estado === "abierto" ? "selected" : ""}>En revisión</option>
             <option value="en_proceso" ${estado === "en_proceso" ? "selected" : ""}>En curso</option>
             <option value="resuelto" ${estado === "resuelto" ? "selected" : ""}>Resuelto</option>
+          </select></div>
+          <div class="field"><label for="fprioridad">Prioridad</label><select class="select" id="fprioridad" name="prioridad">
+            <option value="todos">Todas las prioridades</option>
+            ${Object.entries(PRIORIDADES).map(([key, label]) => `<option value="${key}" ${params.get("prioridad") === key ? "selected" : ""}>${esc(label)}</option>`).join("")}
           </select></div>
           <div class="field"><label for="fq">Palabra clave</label><input class="input" id="fq" name="q" type="search" value="${esc(params.get("q") || "")}" placeholder="Ej.: bache, luminaria…" /></div>
           <button class="btn btn-primary btn-block" type="submit">${icon("search", 16)} Aplicar filtros</button>
@@ -756,7 +771,7 @@ function claimRow(c, { thumbnail = false, status = false } = {}) {
       <p class="muted">${esc(cat.label)} · ${esc(c.barrio)} · ${fmtDate(c.fecha)} · #${esc(c.numero)}</p>
       <p class="claim-summary">${esc(c.descripcion)}</p>
     </div>
-    <div class="claim-row-actions">${c.apoyos >= THRESHOLD ? `<span class="badge badge-petition">${icon("doc", 12)} Petición colectiva</span>` : ""}${status ? statusBadge(c.estado) : ""}<a href="#/reclamo/${esc(c.id)}">Ver detalle →</a></div>
+    <div class="claim-row-actions">${c.apoyos >= THRESHOLD ? `<span class="badge badge-petition">${icon("doc", 12)} Petición colectiva</span>` : ""}${status ? statusBadge(c.estado) + priorityBadge(c) : ""}<a href="#/reclamo/${esc(c.id)}">Ver detalle →</a></div>
   </article>`;
 }
 
@@ -945,7 +960,7 @@ function renderReclamo(id) {
         <div>
           <div class="panel panel-pad">
             <div class="claim-detail-actions">
-              <div class="claim-detail-badges">${catChip(c.categoria)}${statusBadge(c.estado)}${c.prioridad && PRIORIDADES[c.prioridad] ? `<span class="badge badge-prio-${c.prioridad}">${icon("flag", 13)} Prioridad ${esc(PRIORIDADES[c.prioridad])}</span>` : ""}${ready ? `<span class="badge badge-petition">${icon("doc", 12)} Petición colectiva</span>` : ""}${c.verificado ? '<span class="badge badge-verified">' + icon("check", 13) + " Verificado</span>" : ""}</div>
+              <div class="claim-detail-badges">${catChip(c.categoria)}${statusBadge(c.estado)}${priorityBadge(c)}${ready ? `<span class="badge badge-petition">${icon("doc", 12)} Petición colectiva</span>` : ""}${c.verificado ? '<span class="badge badge-verified">' + icon("check", 13) + " Verificado</span>" : ""}</div>
               ${ownsClaim(c) ? `<button type="button" class="btn btn-ghost btn-sm claim-delete-trigger" data-action="open-delete-claim" data-id="${esc(c.id)}">${icon("limpieza", 16)} Borrar reclamo</button>
               <dialog id="claim-delete-dialog" class="modal claim-delete-dialog" aria-labelledby="claim-delete-heading" aria-describedby="claim-delete-description">
                 <h2 id="claim-delete-heading">¿Borrar este reclamo?</h2>
@@ -972,7 +987,7 @@ function renderReclamo(id) {
                     ? `<p class="support-own-note">${icon("info", 17)} No podés apoyar tu propio reclamo.</p>`
                     : `<button class="btn ${supported ? "btn-ghost" : "btn-accent"} btn-block" data-action="support" data-id="${esc(c.id)}" ${supported ? "disabled" : ""}>${icon("support", 18)} ${supported ? "Ya apoyaste" : "Apoyar este reclamo"}</button>`}
                   <div style="width:100%;margin-top:4px"><div class="progress"><i style="width:${pct}%"></i></div><div style="display:flex;justify-content:space-between;font-size:.75rem;color:var(--muted);margin-top:6px"><span>${ready ? "Meta alcanzada" : "Petición colectiva"}</span><span>${c.apoyos}/${THRESHOLD}</span></div></div>
-                  ${ready ? `<a class="btn btn-primary btn-block" href="#/peticiones">${icon("doc", 17)} Ver petición colectiva</a>` : `<p class="muted" style="font-size:.77rem;margin:0">Faltan ${THRESHOLD - c.apoyos} apoyos para la carta pública.</p>`}
+                  ${ready ? `<a class="btn btn-primary btn-block" href="#/peticiones?carta=${encodeURIComponent(c.id)}">${icon("doc", 17)} Ver petición colectiva</a>` : `<p class="muted" style="font-size:.77rem;margin:0">Faltan ${THRESHOLD - c.apoyos} apoyos para la carta pública.</p>`}
                 </div>
               </div>
             </div>
@@ -1140,8 +1155,8 @@ function renderRegistro() {
         </div>
         </div>
         <div class="row2">
-          <div class="field"><label for="rpass">Contraseña</label><input class="input" id="rpass" name="password" type="password" autocomplete="new-password" required minlength="6"></div>
-          <div class="field"><label for="rpass2">Confirmar contraseña</label><input class="input" id="rpass2" name="password2" type="password" autocomplete="new-password" required minlength="6"></div>
+          <div class="field"><label for="rpass">Contraseña</label><div class="password-field"><input class="input" id="rpass" name="password" type="password" autocomplete="new-password" required minlength="6">${passwordToggle("rpass")}</div></div>
+          <div class="field"><label for="rpass2">Confirmar contraseña</label><div class="password-field"><input class="input" id="rpass2" name="password2" type="password" autocomplete="new-password" required minlength="6">${passwordToggle("rpass2")}</div></div>
         </div>
         <label class="remember-login"><input type="checkbox" required> <span>Acepto los <a href="#/terminos">términos y condiciones</a>.</span></label>
       </form>
@@ -1157,7 +1172,7 @@ function renderLogin() {
     <div class="view-heading"><h1>Inicio de sesión</h1><p class="sub">Ingresá para crear reclamos, apoyar y comentar.</p></div>
     <form data-form="login">
       <div class="field"><label for="lemail">Email</label><input class="input" id="lemail" name="email" type="email" autocomplete="email" required></div>
-      <div class="field"><label for="lpass">Contraseña</label><input class="input" id="lpass" name="password" type="password" autocomplete="current-password" required></div>
+      <div class="field"><label for="lpass">Contraseña</label><div class="password-field"><input class="input" id="lpass" name="password" type="password" autocomplete="current-password" required>${passwordToggle("lpass")}</div></div>
       <label class="remember-login"><input type="checkbox" name="remember"> Mantener sesión</label>
       <button class="btn btn-primary btn-block" type="submit">Ingresar</button>
     </form>
@@ -1306,7 +1321,7 @@ function municipalEditor(c) {
   const latest = c.comentarios.findLast((entry) => entry.muni);
   return `<article class="panel municipal-editor" aria-labelledby="municipal-editor-title">
     <header class="municipal-record">
-      <div class="municipal-badges">${catChip(c.categoria)}${statusBadge(c.estado)}</div>
+      <div class="municipal-badges">${catChip(c.categoria)}${statusBadge(c.estado)}${priorityBadge(c)}</div>
       <h3 id="municipal-editor-title" tabindex="-1">${esc(c.titulo)}</h3>
       <p class="municipal-meta">#${esc(c.numero)} · ${esc(c.barrio)} · ${fmtDate(c.fecha)} · ${c.apoyos} ${c.apoyos === 1 ? "apoyo" : "apoyos"}</p>
       <p class="municipal-description">${esc(c.descripcion)}</p>
@@ -1318,6 +1333,14 @@ function municipalEditor(c) {
         <div class="row2">
           <div class="field"><label for="estado">Estado</label><select class="input" id="estado" name="estado">${Object.entries(ESTADOS).map(([key, label]) => `<option value="${key}" ${c.estado === key ? "selected" : ""}>${label}</option>`).join("")}</select></div>
           <label class="municipal-verify"><input type="checkbox" name="verificado" ${c.verificado ? "checked" : ""}> Información verificada</label>
+        </div>
+      </div>
+      <div class="municipal-form-section">
+        <h4>Prioridad del reclamo</h4>
+        <p class="hint">Evaluá la urgencia del reclamo. Podés corregir la prioridad y confirmar que fue revisada por el Municipio.</p>
+        <div class="row2">
+          <div class="field"><label for="municipal-priority">Prioridad</label><select class="input" id="municipal-priority" name="prioridad">${Object.entries(PRIORIDADES).map(([key, label]) => `<option value="${key}" ${claimPriority(c) === key ? "selected" : ""}>${esc(label)}</option>`).join("")}</select></div>
+          <label class="municipal-verify"><input type="checkbox" name="prioridadVerificada" ${c.prioridadVerificada ? "checked" : ""}> Prioridad verificada por el Municipio</label>
         </div>
       </div>
       <div class="municipal-form-section">
@@ -1762,6 +1785,10 @@ function render({ deferMotion = false, fallbackTransition = false } = {}) {
   });
   updateShell(view);
   if (!deferMotion) playViewEffects();
+  if (view === "peticiones") {
+    const letterId = getRoute().params.get("carta");
+    if (letterId) openLetter(letterId);
+  }
 }
 
 /* ---------------- Acciones ---------------- */
@@ -1939,14 +1966,17 @@ function deleteOwnClaim(id, dialog) {
 function openLetter(id) {
   const c = getClaim(id);
   if (!c || c.apoyos < THRESHOLD) return;
+  if ([...document.querySelectorAll("[data-letter-id]")].some(el => el.dataset.letterId === id)) return;
   const backdrop = document.createElement("div");
   backdrop.className = "modal-backdrop";
+  backdrop.dataset.letterId = id;
   backdrop.innerHTML = `<div class="modal" role="dialog" aria-modal="true" aria-labelledby="letterTitle">
     <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start"><div><h3 id="letterTitle">Carta al área responsable</h3><p class="muted" style="margin:0 0 14px;font-size:.86rem">${c.peticionEnviada ? "Enviada a " + esc(petitionArea(c)) + " · " + fmtDate(c.peticionEnviada.fecha) : esc(petitionArea(c))}</p></div><button class="btn btn-ghost btn-sm" data-action="close-modal" aria-label="Cerrar">${icon("close", 16)}</button></div>
     <div class="letter">${esc(letterText(c))}</div>
     <div style="display:flex;gap:10px;margin-top:16px;flex-wrap:wrap"><button class="btn btn-ghost btn-sm" data-action="copy-letter" data-id="${esc(c.id)}">${icon("doc", 16)} Copiar carta</button>
-    ${c.peticionEnviada ? "" : `<button class="btn btn-primary btn-sm" data-action="send-letter" data-id="${esc(c.id)}">Enviar al área</button>`}</div>
+    ${c.peticionEnviada || !ownsClaim(c) ? "" : `<button class="btn btn-primary btn-sm" data-action="send-letter" data-id="${esc(c.id)}">Enviar al área</button>`}</div>
     <div class="letter-send-status" role="status"></div>
+    ${!c.peticionEnviada && !ownsClaim(c) ? '<p class="hint">Solo el autor del reclamo puede enviar esta carta al área responsable.</p>' : ""}
     <p class="hint">El envío se registra en AvisAR como parte de la demostración.</p>
   </div>`;
   document.body.appendChild(backdrop);
@@ -1959,6 +1989,10 @@ function sendPetition(id, backdrop) {
   if (!claim || claim.apoyos < THRESHOLD || claim.peticionEnviada) return;
   if (!requireLogin(location.hash)) {
     closeModal(backdrop);
+    return;
+  }
+  if (!ownsClaim(claim)) {
+    toast("Solo el autor del reclamo puede enviar la carta.");
     return;
   }
   claim.peticionEnviada = {
@@ -1982,7 +2016,15 @@ function sendPetition(id, backdrop) {
   render();
 }
 
-function closeModal(el) { const b = el.closest(".modal-backdrop") || el; b.classList.remove("show"); setTimeout(() => b.remove(), 200); }
+function closeModal(el) {
+  const b = el.closest(".modal-backdrop") || el;
+  const { parts, params } = getRoute();
+  if (parts[0] === "peticiones" && params.get("carta") === b.dataset.letterId) {
+    params.delete("carta");
+    history.replaceState(null, "", "#/peticiones" + (params.size ? "?" + params : ""));
+  }
+  b.classList.remove("show"); setTimeout(() => b.remove(), 200);
+}
 
 function copyText(text) {
   if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(() => toast("Carta copiada."), () => fallbackCopy(text));
@@ -2382,6 +2424,8 @@ document.addEventListener("submit", async (e) => {
     const cat = data.get("cat"); const estado = data.get("estado"); const q = String(data.get("q") || "").trim();
     if (cat && cat !== "todos") p.set("cat", cat);
     if (estado && estado !== "todos") p.set("estado", estado);
+    const prioridad = data.get("prioridad");
+    if (Object.hasOwn(PRIORIDADES, prioridad)) p.set("prioridad", prioridad);
     if (q) p.set("q", q);
     location.hash = "#/reclamos" + (p.toString() ? "?" + p.toString() : "");
     return;
@@ -2660,6 +2704,9 @@ document.addEventListener("submit", async (e) => {
     if (submit.disabled) return;
     const data = new FormData(form);
     const nuevoEstado = data.get("estado");
+    const prioridad = data.get("prioridad");
+    if (!Object.hasOwn(PRIORIDADES, prioridad)) { toast("Seleccioná una prioridad válida."); return; }
+    const prioridadVerificada = data.has("prioridadVerificada");
     const verificado = data.get("verificado") === "on";
     const evidencia = String(data.get("evidencia") || "").trim();
     const respuesta = String(data.get("respuesta") || "").trim();
@@ -2678,7 +2725,9 @@ document.addEventListener("submit", async (e) => {
     const fileKey = file ? c.id + "-" + (crypto.randomUUID?.() || Date.now()) : "";
     const today = new Date().toISOString().slice(0, 10);
     const updated = {
-      ...c, estado: nuevoEstado, verificado, evidencia,
+      ...c, estado: nuevoEstado, verificado, evidencia, prioridad, prioridadVerificada,
+      prioridadVerificadaPor: prioridadVerificada ? state.session.email : "",
+      fechaVerificacionPrioridad: prioridadVerificada ? today : "",
       evidenciaFoto: file || remove ? "" : c.evidenciaFoto,
       evidenciaMedia: fileKey || (remove ? "" : c.evidenciaMedia),
       fechaResolucion: nuevoEstado === "resuelto" ? c.fechaResolucion || today : "",
@@ -2787,3 +2836,31 @@ document.addEventListener("keydown", (event) => {
 });
 resetSidenav();
 render();
+
+// Una prioridad modificada necesita una nueva confirmación del administrador.
+document.addEventListener("change", event => {
+  if (event.target.id === "municipal-priority") {
+    const check = event.target.form?.elements.prioridadVerificada;
+    if (check) check.checked = false;
+  }
+});
+
+function passwordEye(visible) {
+  return `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/>${visible ? '<path d="m3 3 18 18"/>' : ""}</svg>`;
+}
+
+function passwordToggle(id) {
+  return `<button type="button" class="password-toggle" data-toggle-password="${id}" aria-controls="${id}" aria-pressed="false" aria-label="Mostrar contraseña">${passwordEye(false)}</button>`;
+}
+
+document.addEventListener("click", event => {
+  const button = event.target.closest("[data-toggle-password]");
+  if (!button) return;
+  const input = document.getElementById(button.dataset.togglePassword);
+  if (!input) return;
+  const visible = input.type === "password";
+  input.type = visible ? "text" : "password";
+  button.setAttribute("aria-pressed", String(visible));
+  button.setAttribute("aria-label", visible ? "Ocultar contraseña" : "Mostrar contraseña");
+  button.innerHTML = passwordEye(visible);
+});
