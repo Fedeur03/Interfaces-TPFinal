@@ -304,7 +304,7 @@ function claimCard(c) {
   const photo = claimPhoto(c, "card");
   const media = photo && !photo.startsWith("data:video/") ? `<img class="media-img" src="${esc(photo)}" alt="" loading="lazy">` : `<span class="big-ic">${icon(cat.icon, 52, 1.7)}</span>`;
   return `
-    <a class="claim-card" href="#/reclamo/${c.id}">
+    <a class="claim-card" href="#/reclamo/${c.id}?desde=inicio">
       <div class="claim-photo" style="--c:${cat.color}">${media}</div>
       <div class="claim-body">
         <div style="display:flex;gap:7px;flex-wrap:wrap">${catChip(c.categoria)}${statusBadge(c.estado)}${petitionBadge(c)}</div>
@@ -780,13 +780,13 @@ function renderReclamos() {
         <div>
           <div class="map-card explore-results-map">${reportMap(list, { cls: "explore-map" })}</div>
           <div class="results-head"><h3 id="claim-results" class="results-title" tabindex="-1">Resultados</h3>${hasFilters ? `<a class="muted" style="font-size:.84rem" href="#/reclamos">Limpiar filtros</a>` : ""}</div>
-          ${page.length ? `<p class="page-count" role="status">${count}</p><div class="claim-list">${page.map((c) => claimRow(c, { thumbnail: true, status: true })).join("")}</div>${navigation}` : `<div class="empty"><p style="font-weight:700;color:var(--ink);margin:0 0 6px">${state.claims.length ? "No hay reclamos que coincidan" : "Todavía no hay reclamos"}</p><p style="margin:0 0 14px">${state.claims.length ? "Probá con otros filtros." : "Cuando los vecinos publiquen, van a aparecer acá."}</p><a class="btn btn-primary" href="#/crear">${icon("plus", 16)} Crear el primero</a></div>`}
+          ${page.length ? `<p class="page-count" role="status">${count}</p><div class="claim-list">${page.map((c) => claimRow(c, { thumbnail: true, status: true, desde: location.hash || "#/reclamos" })).join("")}</div>${navigation}` : `<div class="empty"><p style="font-weight:700;color:var(--ink);margin:0 0 6px">${state.claims.length ? "No hay reclamos que coincidan" : "Todavía no hay reclamos"}</p><p style="margin:0 0 14px">${state.claims.length ? "Probá con otros filtros." : "Cuando los vecinos publiquen, van a aparecer acá."}</p><a class="btn btn-primary" href="#/crear">${icon("plus", 16)} Crear el primero</a></div>`}
         </div>
       </div>
     </div></section>`;
 }
 
-function claimRow(c, { thumbnail = false, status = false } = {}) {
+function claimRow(c, { thumbnail = false, status = false, desde = "" } = {}) {
   const cat = catMeta(c.categoria);
   const photo = claimPhoto(c, "thumb");
   const image = photo && !photo.startsWith("data:video/");
@@ -797,7 +797,7 @@ function claimRow(c, { thumbnail = false, status = false } = {}) {
       <p class="muted">${esc(cat.label)} · ${esc(c.barrio)} · ${fmtDate(c.fecha)} · #${esc(c.numero)}</p>
       <p class="claim-summary">${esc(c.descripcion)}</p>
     </div>
-    <div class="claim-row-actions">${petitionBadge(c)}${status ? statusBadge(c.estado) + priorityBadge(c) : ""}<a href="#/reclamo/${esc(c.id)}">Ver detalle →</a></div>
+    <div class="claim-row-actions">${petitionBadge(c)}${status ? statusBadge(c.estado) + priorityBadge(c) : ""}<a href="#/reclamo/${esc(c.id)}${desde ? `?desde=${encodeURIComponent(desde)}` : ""}">Ver detalle →</a></div>
   </article>`;
 }
 
@@ -835,7 +835,7 @@ function renderVerReclamos() {
     <div class="section-head"><div class="view-heading"><h1 id="claim-results" tabindex="-1">Ver reclamos</h1><p>Reclamos hechos por vecinos.</p></div>
       <a class="btn btn-ghost" href="#/reclamos">${icon("search", 17)} Explorar y filtrar</a>
     </div>
-    ${page.length ? `<p class="page-count" role="status">${count}</p><div class="claim-list">${page.map((c) => claimRow(c)).join("")}</div>` : `<div class="empty"><p>Todavía no hay reclamos publicados.</p><a class="btn btn-primary" href="#/crear">Crear reclamo</a></div>`}
+    ${page.length ? `<p class="page-count" role="status">${count}</p><div class="claim-list">${page.map((c) => claimRow(c, { desde: location.hash || "#/ver-reclamos" })).join("")}</div>` : `<div class="empty"><p>Todavía no hay reclamos publicados.</p><a class="btn btn-primary" href="#/crear">Crear reclamo</a></div>`}
     ${navigation}
   </div></section>`;
 }
@@ -966,8 +966,28 @@ function renderReclamo(id) {
     "mis-reclamos": ["#/mis-reclamos", "Volver a mis reclamos"],
     peticiones: ["#/peticiones", "Volver a peticiones"],
     mapa: ["#/mapa", "Volver al mapa"],
+    inicio: ["#/", "Volver al inicio"],
+    municipio: ["#/municipio", "Volver al panel municipal"],
+    reclamos: ["#/reclamos", "Volver a explorar"],
+    "ver-reclamos": ["#/ver-reclamos", "Volver a ver reclamos"],
   };
-  const [backHref, backLabel] = backTargets[getRoute().params.get("desde")] || ["#/reclamos", "Volver a explorar"];
+  const desdeParam = getRoute().params.get("desde") || "";
+  const dynamicBack = desdeParam.startsWith("#/") && !desdeParam.startsWith("#/reclamo/") ? desdeParam : "";
+  const dynamicLabel = (hash) => {
+    const route = hash.split("?")[0];
+    if (route === "#/") return "Volver al inicio";
+    if (route === "#/mapa") return "Volver al mapa";
+    if (route === "#/municipio") return "Volver al panel municipal";
+    if (route === "#/peticiones") return "Volver a peticiones";
+    if (route === "#/notificaciones") return "Volver a notificaciones";
+    if (route === "#/mis-reclamos") return "Volver a mis reclamos";
+    if (route === "#/reclamos") return "Volver a explorar";
+    if (route === "#/ver-reclamos") return "Volver a ver reclamos";
+    return "Volver a resultados";
+  };
+  const [backHref, backLabel] = dynamicBack
+    ? [esc(dynamicBack), dynamicLabel(dynamicBack)]
+    : backTargets[desdeParam] || ["#/reclamos", "Volver a explorar"];
 
   const cat = catMeta(c.categoria);
   // Older reports use a shortened description as their title in lists.
@@ -1130,7 +1150,7 @@ function renderEnviado(id) {
       <h1 class="view-title">¡Reclamo enviado con éxito!</h1>
       <p class="muted" role="status">Tu reclamo ya está en el mapa y los vecinos pueden apoyarlo.</p>
       <div class="ticket"><b>N° de reclamo #${esc(c.numero)}</b><span>Fecha de envío: ${fmtDate(c.fecha)}</span></div>
-      <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap"><a class="btn btn-primary" href="#/reclamo/${c.id}">${icon("doc", 17)} Ver mi reclamo</a><a class="btn btn-ghost" href="#/">Volver al inicio</a></div>
+      <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap"><a class="btn btn-primary" href="#/reclamo/${c.id}?desde=inicio">${icon("doc", 17)} Ver mi reclamo</a><a class="btn btn-ghost" href="#/">Volver al inicio</a></div>
     </div></div></section>`;
 }
 
@@ -1365,7 +1385,7 @@ function municipalEditor(c) {
       <h3 id="municipal-editor-title" tabindex="-1">${esc(c.titulo)}</h3>
       <p class="municipal-meta">#${esc(c.numero)} · ${esc(c.barrio)} · ${fmtDate(c.fecha)} · ${c.apoyos} ${c.apoyos === 1 ? "apoyo" : "apoyos"}</p>
       <p class="municipal-description">${esc(c.descripcion)}</p>
-      <a class="btn btn-ghost btn-sm" href="#/reclamo/${esc(c.id)}">Ver reclamo público →</a>
+      <a class="btn btn-ghost btn-sm" href="#/reclamo/${esc(c.id)}?desde=municipio">Ver reclamo público →</a>
     </header>
     <form class="municipal-form" data-form="municipal" data-id="${esc(c.id)}">
       <div class="municipal-form-section">

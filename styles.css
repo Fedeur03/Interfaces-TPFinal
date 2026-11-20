@@ -1517,3 +1517,87 @@ body.media-zoom-open { overflow: hidden; }
 .password-toggle { position: absolute; right: 3px; top: 50%; transform: translateY(-50%); display: grid; place-items: center; width: 40px; height: 36px; padding: 0; border: 0; border-radius: 8px; background: transparent; color: var(--muted); transition: color .15s, background .15s; }
 .password-toggle:hover { background: var(--primary-soft); color: var(--primary); }
 .password-toggle:focus-visible { outline: 2px solid var(--primary); outline-offset: 1px; }
+
+/* Responsive final: tarjetas de explorar, detalle y mis reclamos */
+@media (max-width: 900px) {
+  .claim-row {
+    display: grid;
+    grid-template-columns: 76px minmax(0, 1fr);
+    align-items: start;
+    gap: 12px;
+  }
+  .claim-row .claim-thumb { width: 76px; height: 62px; }
+  .claim-row-body { min-width: 0; }
+  .claim-row-actions {
+    grid-column: 1 / -1;
+    width: 100%;
+    max-width: 100%;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 8px;
+  }
+  .claim-row-actions .badge { white-space: normal; }
+
+  .claim-detail-actions {
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: flex-start;
+  }
+  .claim-detail-badges { max-width: 100%; }
+  .claim-detail-badges .badge { max-width: 100%; white-space: normal; }
+  .detail-meta > span { max-width: 100%; }
+
+  .my-claim-card { grid-template-columns: 96px minmax(0, 1fr) 18px; }
+  .my-claim-status { grid-column: 2; grid-row: 2; flex-direction: row; align-items: center; justify-content: flex-start; gap: 10px; min-width: 0; }
+  .my-claim-status .claim-status-pill { width: auto; }
+  .my-claim-arrow { grid-column: 3; grid-row: 1 / 3; }
+  .my-claim-info h3, .my-claim-info p { overflow-wrap: anywhere; }
+}
+
+@media (max-width: 600px) {
+  .claim-row { grid-template-columns: 58px minmax(0, 1fr); padding: 14px; }
+  .claim-row .claim-thumb { width: 58px; height: 58px; }
+  .claim-row h2 { font-size: 1rem; }
+  .claim-row-actions { gap: 6px; }
+  .claim-row-actions a { white-space: normal; }
+
+  .claim-detail-badges { gap: 6px; }
+  .claim-detail-badges .badge { font-size: .7rem; padding: 3px 8px; }
+  .detail-meta { gap: 6px 14px; }
+
+  .my-claim-card { grid-template-columns: 72px minmax(0, 1fr) 18px; gap: 10px; padding: 12px; }
+  .my-claim-thumb { width: 72px; height: 64px; }
+  .my-claim-info p { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .my-claim-status { grid-column: 2 / 4; }
+  .my-claim-date { white-space: normal; }
+}
+
+@media (max-width: 420px) {
+  .claim-detail-actions > .btn { width: 100%; }
+  .claim-gallery-layout { grid-template-columns: minmax(0, 1fr); }
+  .claim-gallery-thumbs { flex-direction: row; max-height: none; overflow-x: auto; }
+  .claim-gallery-thumb { flex: 0 0 44px; width: 44px; height: 44px; }
+  .claim-gallery-main { aspect-ratio: 4 / 3; max-height: 320px; }
+}
+
+/* Photo ampliada también responsive: deja espacio para cerrar, contar y navegar. */
+@media (max-width: 600px) {
+  .media-zoom { padding: 64px 12px 76px; }
+  .media-zoom-stage { max-width: calc(100vw - 24px); max-height: calc(100vh - 150px); max-height: calc(100dvh - 150px); }
+  .media-zoom img, .media-zoom video { max-width: 100%; max-height: calc(100vh - 150px); max-height: calc(100dvh - 150px); }
+  .media-zoom-close { top: 12px; right: 12px; width: 42px; height: 42px; }
+  .media-zoom-count { top: 20px; }
+  .media-zoom-nav { top: auto; bottom: 16px; transform: none; width: 46px; height: 46px; }
+  .media-zoom-nav.prev { left: 16px; }
+  .media-zoom-nav.next { right: 16px; }
+}
+@media (max-width: 380px) {
+  .media-zoom { padding: 60px 8px 72px; }
+  .media-zoom-stage { max-width: calc(100vw - 16px); }
+  .media-zoom-nav { width: 42px; height: 42px; bottom: 12px; }
+  .media-zoom-nav.prev { left: 10px; }
+  .media-zoom-nav.next { right: 10px; }
+  .media-zoom-count { font-size: .75rem; padding: 4px 9px; }
+}
