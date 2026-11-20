@@ -128,7 +128,7 @@
    .topbar-search input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; padding: 7px 6px; color: var(--ink); }
    
    .topbar-right { margin-left: auto; display: flex; align-items: center; gap: 6px; }
-   .notif-dot { position: absolute; top: 7px; right: 8px; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); border: 2px solid #fff; }
+   .notif-dot { position: absolute; top: 5px; right: 5px; width: 11px; height: 11px; border-radius: 50%; background: var(--accent); border: 2px solid #fff; }
    
    .user-area { display: flex; align-items: center; gap: 7px; }
    .user-chip { display: inline-flex; align-items: center; gap: 8px; padding: 4px 9px 4px 4px; border-radius: 999px; border: 1px solid var(--line); background: #fff; }
@@ -154,7 +154,8 @@
      color: var(--ink-soft); font-weight: 600; font-size: .85rem; white-space: nowrap;
      transition: background .10s, color .10s;
    }
-   .snav-item .ic { width: 20px; display: grid; place-items: center; flex: none; color: #64748b; }
+   .snav-item .ic { position: relative; width: 20px; display: grid; place-items: center; flex: none; color: #64748b; }
+   .notif-dot-snav { top: -2px; right: -3px; transform: none; }
    .snav-item[hidden] { display: none; }
    .snav-item:hover { background: #f1f5f9; color: var(--ink); }
    .snav-item.is-active { background: var(--primary-soft); color: var(--primary); }
@@ -1411,7 +1412,6 @@
    .claim-status-pill.review{background:#e9f0fe;color:#2563eb}
    .claim-status-pill.progress{background:#fff3d8;color:#a66c08}
    .claim-status-pill.done{background:#def4e5;color:#167748}
-   .claim-status-pill .my-claim-gear-icon{width:15px;height:15px;display:inline-block;vertical-align:middle}
    .my-claim-status .claim-status-pill{width:100%;max-width:100%;height:auto;min-height:34px;box-sizing:border-box;justify-content:center}
    @media(max-width:600px){.my-claim-status .claim-status-pill{width:auto}}
    .claim-list .badge-abierto{color:var(--info);background:var(--info-soft);border-color:#c9d8fb}

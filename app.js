@@ -49,6 +49,7 @@ const ICONS = {
   check: '<path d="M20 6L9 17l-5-5"/>',
   "check-ring": '<circle cx="12" cy="12" r="9"/><path d="m8 12 2.5 2.5 5.5-5.5"/>',
   clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+  gear: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 1.56V21a2 2 0 1 1-4 0v-.1A1.7 1.7 0 0 0 9 19.4a1.7 1.7 0 0 0-1.88.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-1.56-1H3a2 2 0 1 1 0-4h.1A1.7 1.7 0 0 0 4.6 9a1.7 1.7 0 0 0-.34-1.88l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-1.56V3a2 2 0 1 1 4 0v.1A1.7 1.7 0 0 0 15 4.6a1.7 1.7 0 0 0 1.88-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 19.4 9v.1a1.7 1.7 0 0 0 1.56 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>',
   chart: '<path d="M4 20V10"/><path d="M10 20V4"/><path d="M16 20v-7"/><path d="M22 20H2"/>',
   plus: '<path d="M12 5v14"/><path d="M5 12h14"/>',
   search: '<circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/>',
@@ -225,7 +226,9 @@ function loadState() {
 
           supported: Array.isArray(p.supported) ? { [session.email]: p.supported } : p.supported || {},
           session,
-          notifications: Array.isArray(p.notifications) ? p.notifications : [],
+          notifications: Array.isArray(p.notifications)
+            ? p.notifications.filter((n) => n.titulo !== "Apoyo registrado")
+            : [],
           profiles: Array.isArray(p.profiles) ? p.profiles.map(normalizeProfile) : [],
         };
       }
@@ -593,8 +596,7 @@ function updateShell(view) {
     }
   }
   const unread = accountNotifications().filter((n) => !n.leida).length;
-  const dot = document.getElementById("notifDot");
-  if (dot) dot.hidden = unread === 0;
+  document.querySelectorAll("#notifDot, #sidenavNotifDot").forEach((dot) => { dot.hidden = unread === 0; });
   const activeMap = { reclamo: "reclamos", enviado: "crear" };
   const active = activeMap[view] || view;
   document.querySelector('[data-nav="municipal"]').hidden = !hasMunicipalAccess();
@@ -959,6 +961,12 @@ document.addEventListener("keydown", (event) => {
 function renderReclamo(id) {
   const c = getClaim(id);
   if (!c) return `<section class="section"><div class="container"><div class="empty"><p style="font-weight:700;color:var(--ink)">Reclamo no encontrado</p><a class="btn btn-ghost" href="#/reclamos" style="margin-top:12px">Volver a reclamos</a></div></div></section>`;
+  const backTargets = {
+    notificaciones: ["#/notificaciones", "Volver a notificaciones"],
+    "mis-reclamos": ["#/mis-reclamos", "Volver a mis reclamos"],
+    peticiones: ["#/peticiones", "Volver a peticiones"],
+  };
+  const [backHref, backLabel] = backTargets[getRoute().params.get("desde")] || ["#/reclamos", "Volver a explorar"];
 
   const cat = catMeta(c.categoria);
   // Older reports use a shortened description as their title in lists.
@@ -980,7 +988,7 @@ function renderReclamo(id) {
 
   return `
     <section class="section"><div class="container">
-      <a href="#/reclamos" class="muted" style="display:inline-flex;align-items:center;gap:6px;font-size:.88rem;font-weight:600;margin-bottom:16px">${icon("arrow", 16)} Volver a explorar</a>
+      <a href="${backHref}" class="muted" style="display:inline-flex;align-items:center;gap:6px;font-size:.88rem;font-weight:600;margin-bottom:16px">${icon("arrow", 16)} ${backLabel}</a>
       <div class="detail-grid">
         <div>
           <div class="panel panel-pad">
@@ -1278,16 +1286,14 @@ function renderMisReclamos() {
     const category = REPORT_CATEGORIES[c.categoria]?.label || c.categoria || "Espacio público";
     const status = ESTADOS[c.estado] || "En revisión";
     const statusClass = c.estado === "abierto" ? "review" : c.estado === "en_proceso" ? "progress" : "done";
-    const statusIconMarkup = c.estado === "en_proceso"
-      ? `<img class="my-claim-gear-icon" src="assets/ilustracion-icono-doodle-engranaje_53876-5596.avif" alt="" width="14" height="14">`
-      : icon(c.estado === "resuelto" ? "check" : "clock", 13);
+    const statusIconMarkup = icon(c.estado === "en_proceso" ? "gear" : c.estado === "resuelto" ? "check" : "clock", 14);
     // La foto que adjuntó el vecino; si no adjuntó, una genérica real según la categoría.
     const attached = c.foto && !String(c.foto).startsWith("data:video/");
     const photoSrc = attached
       ? c.foto
       : (claimPhoto({ ...c, foto: "" }, "card") || "assets/fotos-referencia/otro-card.webp");
     const photoAlt = (attached ? "Foto del reclamo" : "Imagen de referencia") + ": " + (c.titulo || category);
-    return `<a class="panel my-claim-card" href="#/reclamo/${esc(c.id)}" aria-label="Ver ${esc(c.titulo || "reclamo")}">
+    return `<a class="panel my-claim-card" href="#/reclamo/${esc(c.id)}?desde=mis-reclamos" aria-label="Ver ${esc(c.titulo || "reclamo")}">
       <img class="my-claim-thumb" src="${esc(photoSrc)}" alt="${esc(photoAlt)}" loading="lazy">
       <div class="my-claim-info"><h3>${esc(c.titulo || c.descripcion || "Reclamo vecinal")}</h3><div class="my-claim-meta"><span>${esc(category)}</span><i>·</i><span>${esc(c.direccion || c.ubicacion || "Vicente López")}</span></div><p>${esc(c.descripcion || "Seguimiento del reclamo vecinal.")}</p></div>
       <div class="my-claim-status"><span class="claim-status-pill ${statusClass}">${statusIconMarkup} ${esc(status)}</span><span class="my-claim-date">${icon("calendar", 13)} ${fmtDate(c.fecha)}</span></div>
@@ -1309,7 +1315,7 @@ function renderNotificaciones() {
     <div class="section-head"><div class="view-heading"><h1 id="notification-title" tabindex="-1">Notificaciones</h1><p>Novedades, estados actualizados y respuestas del municipio.</p></div>
       ${list.length ? `<div class="view-actions">${list.some((n) => !n.leida) ? '<button class="btn btn-ghost btn-sm" data-action="mark-all">Marcar todas como leídas</button>' : ""}<button class="btn btn-ghost btn-sm" data-action="delete-all-notifications">Eliminar todas</button></div>` : ""}</div>
     ${list.length ? `<ul class="notif-list">${list.map((n) => `<li class="notif-entry">
-      <a class="notif-item ${n.leida ? "" : "unread"}" data-id="${esc(n.id)}" href="${n.ref ? "#/reclamo/" + esc(n.ref) : "#/"}"><span class="nic">${icon(tipoIcon[n.tipo] || "bell", 21)}</span><span class="notification-body"><span class="nt">${esc(n.titulo)}</span><span class="nd">${esc(n.texto)}</span></span><span class="nh">${fmtDate(n.fecha)}</span>${n.leida ? "" : '<span class="new-dot" aria-label="Sin leer"></span>'}</a>
+      <a class="notif-item ${n.leida ? "" : "unread"}" data-id="${esc(n.id)}" href="${n.ref ? "#/reclamo/" + esc(n.ref) + "?desde=notificaciones" : "#/"}"><span class="nic">${icon(tipoIcon[n.tipo] || "bell", 21)}</span><span class="notification-body"><span class="nt">${esc(n.titulo)}</span><span class="nd">${esc(n.texto)}</span></span><span class="nh">${fmtDate(n.fecha)}</span>${n.leida ? "" : '<span class="new-dot" aria-label="Sin leer"></span>'}</a>
       <button class="icon-btn" type="button" data-action="delete-notification" data-id="${esc(n.id)}" aria-label="Eliminar aviso: ${esc(n.titulo)}" data-tooltip="Eliminar aviso">${icon("limpieza", 18)}</button>
     </li>`).join("")}</ul>` : '<div class="empty"><p>No tenés notificaciones.</p><p>Cuando haya novedades, van a aparecer acá.</p></div>'}
   </div></section>`;
@@ -1705,7 +1711,9 @@ function renderPeticiones() {
   const requested = params.get("grupo") || "habilitadas";
   const current = Object.hasOwn(groups, requested) ? requested : "habilitadas";
   const list = [...groups[current]].sort((a, b) => b.apoyos - a.apoyos);
-  const { page, navigation } = claimPagination(list, "peticiones", params, 8);
+  const pageParams = new URLSearchParams(params);
+  pageParams.delete("carta");
+  const { page, navigation } = claimPagination(list, "peticiones", pageParams, 8);
   const tab = (key, label) => {
     const active = current === key;
     const href = key === "habilitadas" ? "#/peticiones" : `#/peticiones?grupo=${key}`;
@@ -1725,13 +1733,13 @@ function renderPeticiones() {
       ${page.length ? page.map((claim) => {
         const pct = Math.min(100, Math.round(claim.apoyos / THRESHOLD * 100));
         return `<article class="petition-card ${current === "habilitadas" ? "ready" : ""}"><div>
-          <div class="petition-badges">${catChip(claim.categoria)}${statusBadge(claim.estado)}${current === "resueltas" ? '<span class="badge badge-verified">Problema ya resuelto</span>' : ""}</div>
+          <div class="petition-badges">${catChip(claim.categoria)}${statusBadge(claim.estado)}</div>
           <h3>${esc(claim.titulo)}</h3><p class="muted">${esc(claim.barrio)} · ${esc(claim.direccion)}</p>
           ${current === "habilitadas" ? `<p class="muted">${claim.peticionEnviada ? '<span class="badge badge-verified">Carta enviada</span> a' : "Destinatario"} ${esc(petitionArea(claim))}</p>` : ""}
           <div class="pbar" style="--c:${CATEGORY_COLOR}"><div class="progress"><i style="width:${pct}%"></i></div>
           <div class="pmeta"><span>${claim.apoyos} apoyos</span><span>${current === "en-camino" ? "Faltan " + (THRESHOLD - claim.apoyos) : current === "resueltas" ? "Resuelto" : "Meta alcanzada"}</span></div></div></div>
           <div class="petition-actions">${current === "habilitadas" ? `<button class="btn btn-primary btn-sm" data-action="letter" data-id="${esc(claim.id)}">${icon("doc", 16)} Ver carta</button>` : ""}
-          <a class="btn btn-ghost btn-sm" href="#/reclamo/${esc(claim.id)}">${current === "en-camino" && claim.estado !== "resuelto" ? "Ver y apoyar" : "Ver reclamo"}</a></div></article>`;
+          <a class="btn btn-ghost btn-sm" href="#/reclamo/${esc(claim.id)}?desde=peticiones">${current === "en-camino" && claim.estado !== "resuelto" ? "Ver y apoyar" : "Ver reclamo"}</a></div></article>`;
       }).join("") : '<div class="empty">Todavía no hay iniciativas en esta sección.</div>'}
       ${navigation}
     </div>
@@ -1976,6 +1984,41 @@ function resetSidenav() {
   setSidenav(false);
 }
 
+function supportNotificationText(cantidad, ultimo = "Un vecino") {
+  if (cantidad === 1) return `${ultimo} apoyó tu reclamo.`;
+  return `${ultimo} y ${cantidad - 1} vecinos más apoyaron tu reclamo.`;
+}
+
+function notifySupporter(claim, supporter, supporterEmail) {
+  const recipient = claim.owner;
+  if (!recipient || !supporterEmail) return;
+  const now = new Date();
+  const GROUP_MS = 6 * 60 * 60 * 1000;
+  // Se agrupan los apoyos de las últimas 6 horas; después se abre un aviso nuevo.
+  const previous = state.notifications.find((n) =>
+    n.tipo === "apoyo" && n.ref === claim.id && n.recipient === recipient
+    && Array.isArray(n.apoyadores) && n.fechaHora
+    && now.getTime() - new Date(n.fechaHora).getTime() <= GROUP_MS);
+  const emails = previous ? [...previous.apoyadores] : [];
+  if (!emails.includes(supporterEmail)) emails.push(supporterEmail);
+  const notification = {
+    id: previous?.id || "n" + now.getTime(),
+    tipo: "apoyo",
+    recipient,
+    titulo: "Apoyos en tu reclamo",
+    texto: supportNotificationText(emails.length, supporter),
+    fecha: now.toISOString().slice(0, 10),
+    fechaHora: now.toISOString(),
+    leida: false,
+    ref: claim.id,
+    cantidad: emails.length,
+    apoyadores: emails,
+    ultimo: supporter,
+  };
+  if (previous) state.notifications.splice(state.notifications.indexOf(previous), 1);
+  state.notifications.unshift(notification);
+}
+
 function supportClaim(id) {
   if (!requireLogin(location.hash)) return;
   const c = getClaim(id);
@@ -1984,7 +2027,7 @@ function supportClaim(id) {
   if (ownsClaim(c)) { toast("No podés apoyar tu propio reclamo."); return; }
   c.apoyos++;
   state.supported[state.session.email] = [...ownSupports(), id];
-  state.notifications.unshift({ id: "n" + Date.now(), tipo: "apoyo", recipient: state.session.email, titulo: "Apoyo registrado", texto: `Apoyaste "${c.titulo}".`, fecha: new Date().toISOString().slice(0, 10), leida: false, ref: c.id });
+  notifySupporter(c, publicUsername(state.session), state.session.email);
   save(); render(); toast("¡Gracias! Tu apoyo quedó registrado.");
 }
 
@@ -2013,7 +2056,7 @@ function deleteOwnClaim(id, dialog) {
 
 function openLetter(id) {
   const c = getClaim(id);
-  if (!c || c.apoyos < THRESHOLD) return;
+  if (!c || c.apoyos < THRESHOLD || petitionStatus(c) === "resuelto") return;
   const status = petitionStatus(c);
   if ([...document.querySelectorAll("[data-letter-id]")].some(el => el.dataset.letterId === id)) return;
   const backdrop = document.createElement("div");
@@ -2764,6 +2807,12 @@ document.addEventListener("submit", async (e) => {
     const verificado = data.get("verificado") === "on";
     const evidencia = String(data.get("evidencia") || "").trim();
     const respuesta = String(data.get("respuesta") || "").trim();
+    const autoNews = nuevoEstado === "en_proceso" && c.estado !== "en_proceso"
+      ? "El municipio inició la intervención y está revisando el punto señalado."
+      : nuevoEstado === "resuelto" && c.estado !== "resuelto"
+        ? "Intervención finalizada. Se adjuntó un registro del resultado."
+        : "";
+    const newsText = respuesta || autoNews;
     const file = form.querySelector("#evidence-file").files[0];
     const remove = data.has("removeEvidence");
     if (file && (file.size > EVIDENCE_LIMIT || !/^(image\/(png|jpeg|webp|gif)|video\/(mp4|webm|quicktime))$/.test(file.type))) {
@@ -2785,7 +2834,7 @@ document.addEventListener("submit", async (e) => {
       evidenciaFoto: file || remove ? "" : c.evidenciaFoto,
       evidenciaMedia: fileKey || (remove ? "" : c.evidenciaMedia),
       fechaResolucion: nuevoEstado === "resuelto" ? c.fechaResolucion || today : "",
-      comentarios: respuesta ? [...c.comentarios, { autor: "Municipio de Vicente López", texto: respuesta, fecha: today, muni: true }] : c.comentarios,
+      comentarios: newsText ? [...c.comentarios, { autor: "Municipio de Vicente López", texto: newsText, fecha: today, muni: true }] : c.comentarios,
     };
     try {
       if (file) await evidenceTransaction("readwrite", (store) => store.put(file, fileKey));
@@ -2796,11 +2845,35 @@ document.addEventListener("submit", async (e) => {
       }
       state.claims[index] = updated;
       const notify = Boolean(c.owner);
-      if (notify) state.notifications.unshift({ id: "n" + Date.now(), tipo: "municipio", recipient: c.owner, titulo: "Actualización del municipio", texto: `El municipio actualizó "${c.titulo}".`, fecha: today, leida: false, ref: c.id });
+      let nueva = null;
+      let anteriores = [];
+      if (notify) {
+        const cambios = [];
+        if (updated.estado === "resuelto" && c.estado !== "resuelto") cambios.push("Reclamo resuelto con evidencia");
+        else if (c.estado !== updated.estado) cambios.push(`Estado actualizado: ${ESTADOS[updated.estado]}`);
+        if (updated.verificado && !c.verificado) cambios.push("Reclamo verificado por el municipio");
+        if (updated.prioridadVerificada && !c.prioridadVerificada) cambios.push(`Prioridad verificada: ${PRIORIDADES[updated.prioridad]}`);
+        else if (c.prioridad !== updated.prioridad) cambios.push(`Prioridad cambiada a ${PRIORIDADES[updated.prioridad]}`);
+        if (file || remove || c.evidencia !== updated.evidencia || c.evidenciaMedia !== updated.evidenciaMedia) cambios.push("Evidencia actualizada");
+        if (respuesta) cambios.push("Nueva respuesta del municipio");
+        if (!cambios.length) cambios.push("Datos actualizados por el municipio");
+        nueva = {
+          id: "n" + Date.now(), tipo: "municipio", recipient: c.owner,
+          titulo: cambios.length === 1 || cambios[0] === "Reclamo resuelto con evidencia" ? cambios[0] : "Actualización del municipio",
+          texto: `El municipio actualizó "${c.titulo}": ${cambios.join(" · ")}.`,
+          fecha: today, leida: false, ref: c.id,
+        };
+        anteriores = state.notifications.filter((n) => n.tipo === "municipio" && n.ref === c.id && n.recipient === c.owner);
+        state.notifications = state.notifications.filter((n) => !anteriores.includes(n));
+        state.notifications.unshift(nueva);
+      }
       try { persist(); }
       catch (error) {
         state.claims[index] = c;
-        if (notify) state.notifications.shift();
+        if (notify) {
+          state.notifications = state.notifications.filter((n) => n !== nueva);
+          state.notifications.push(...anteriores);
+        }
         throw error;
       }
       if (c.evidenciaMedia && c.evidenciaMedia !== updated.evidenciaMedia) removeEvidenceFile(c.evidenciaMedia);
