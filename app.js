@@ -278,6 +278,19 @@ const MIN_AGE = 18;
 function catMeta(key) { return REPORT_CATEGORIES[key] || { label: key, color: "#64748b", icon: "pin" }; }
 function catChip(key) { const c = catMeta(key); return `<span class="chip" style="--c:${c.color}"><span class="sw"></span>${esc(c.label)}</span>`; }
 function statusBadge(e) { return `<span class="badge badge-${e}">${ESTADOS[e] || e}</span>`; }
+// Un resuelto nunca habilita la carta, aunque tenga 100 apoyos o ya la haya enviado.
+function petitionStatus(c) {
+  if (c.estado === "resuelto") return "resuelto";
+  if (c.peticionEnviada) return "enviada";
+  if (c.apoyos >= THRESHOLD) return "habilitada";
+  return "en-camino";
+}
+function petitionBadge(c) {
+  const status = petitionStatus(c);
+  if (status === "habilitada") return `<span class="badge badge-petition">${icon("doc", 12)} Petición colectiva</span>`;
+  if (status === "enviada") return `<span class="badge badge-verified">${icon("doc", 12)} Carta enviada</span>`;
+  return "";
+}
 function initials(name) {
   const parts = String(name || "V").trim().split(/\s+/);
   return ((parts[0] || "V")[0] + (parts[1] ? parts[1][0] : "")).toUpperCase();
@@ -291,7 +304,7 @@ function claimCard(c) {
     <a class="claim-card" href="#/reclamo/${c.id}">
       <div class="claim-photo" style="--c:${cat.color}">${media}</div>
       <div class="claim-body">
-        <div style="display:flex;gap:7px;flex-wrap:wrap">${catChip(c.categoria)}${statusBadge(c.estado)}${c.apoyos >= THRESHOLD ? `<span class="badge badge-petition">${icon("doc", 12)} Petición colectiva</span>` : ""}</div>
+        <div style="display:flex;gap:7px;flex-wrap:wrap">${catChip(c.categoria)}${statusBadge(c.estado)}${petitionBadge(c)}</div>
         <h3 class="claim-title">${esc(c.titulo)}</h3>
         <div class="claim-meta">${icon("pin", 15)} ${esc(c.barrio)} · ${esc(c.direccion)}</div>
         <p class="claim-desc">${esc(c.descripcion)}</p>
@@ -704,7 +717,7 @@ function renderHome() {
 function prioritizeClaims(list, compare) {
   const petitions = [];
   const rest = [];
-  list.forEach((claim) => (claim.apoyos >= THRESHOLD ? petitions : rest).push(claim));
+  list.forEach((claim) => (petitionStatus(claim) === "habilitada" ? petitions : rest).push(claim));
   if (compare) { petitions.sort(compare); rest.sort(compare); }
   return petitions.concat(rest);
 }
@@ -782,7 +795,7 @@ function claimRow(c, { thumbnail = false, status = false } = {}) {
       <p class="muted">${esc(cat.label)} · ${esc(c.barrio)} · ${fmtDate(c.fecha)} · #${esc(c.numero)}</p>
       <p class="claim-summary">${esc(c.descripcion)}</p>
     </div>
-    <div class="claim-row-actions">${c.apoyos >= THRESHOLD ? `<span class="badge badge-petition">${icon("doc", 12)} Petición colectiva</span>` : ""}${status ? statusBadge(c.estado) + priorityBadge(c) : ""}<a href="#/reclamo/${esc(c.id)}">Ver detalle →</a></div>
+    <div class="claim-row-actions">${petitionBadge(c)}${status ? statusBadge(c.estado) + priorityBadge(c) : ""}<a href="#/reclamo/${esc(c.id)}">Ver detalle →</a></div>
   </article>`;
 }
 
@@ -954,7 +967,8 @@ function renderReclamo(id) {
   const detailTitle = c.titulo === generatedTitle ? description : c.titulo;
   const supported = ownSupports().includes(c.id);
   const pct = Math.min(100, Math.round((c.apoyos / THRESHOLD) * 100));
-  const ready = c.apoyos >= THRESHOLD;
+  const petition = petitionStatus(c);
+  const ready = petition === "habilitada";
   const reference = referencePhoto(c);
   const media = renderClaimMedia(c, cat, reference);
   const news = c.comentarios.filter((m) => m.muni).slice(-3).reverse();
@@ -971,7 +985,7 @@ function renderReclamo(id) {
         <div>
           <div class="panel panel-pad">
             <div class="claim-detail-actions">
-              <div class="claim-detail-badges">${catChip(c.categoria)}${statusBadge(c.estado)}${priorityBadge(c)}${ready ? `<span class="badge badge-petition">${icon("doc", 12)} Petición colectiva</span>` : ""}${c.verificado ? '<span class="badge badge-verified">' + icon("check", 13) + " Verificado</span>" : ""}</div>
+              <div class="claim-detail-badges">${catChip(c.categoria)}${statusBadge(c.estado)}${priorityBadge(c)}${petitionBadge(c)}${c.verificado ? '<span class="badge badge-verified">' + icon("check", 13) + " Verificado</span>" : ""}</div>
               ${ownsClaim(c) ? `<button type="button" class="btn btn-ghost btn-sm claim-delete-trigger" data-action="open-delete-claim" data-id="${esc(c.id)}">${icon("limpieza", 16)} Borrar reclamo</button>
               <dialog id="claim-delete-dialog" class="modal claim-delete-dialog" aria-labelledby="claim-delete-heading" aria-describedby="claim-delete-description">
                 <h2 id="claim-delete-heading">¿Borrar este reclamo?</h2>
@@ -997,8 +1011,14 @@ function renderReclamo(id) {
                   ${ownsClaim(c)
                     ? `<p class="support-own-note">${icon("info", 17)} No podés apoyar tu propio reclamo.</p>`
                     : `<button class="btn ${supported ? "btn-ghost" : "btn-accent"} btn-block" data-action="support" data-id="${esc(c.id)}" ${supported ? "disabled" : ""}>${icon("support", 18)} ${supported ? "Ya apoyaste" : "Apoyar este reclamo"}</button>`}
-                  <div style="width:100%;margin-top:4px"><div class="progress"><i style="width:${pct}%"></i></div><div style="display:flex;justify-content:space-between;font-size:.75rem;color:var(--muted);margin-top:6px"><span>${ready ? "Meta alcanzada" : "Petición colectiva"}</span><span>${c.apoyos}/${THRESHOLD}</span></div></div>
-                  ${ready ? `<a class="btn btn-primary btn-block" href="#/peticiones?carta=${encodeURIComponent(c.id)}">${icon("doc", 17)} Ver petición colectiva</a>` : `<p class="muted" style="font-size:.77rem;margin:0">Faltan ${THRESHOLD - c.apoyos} apoyos para la carta pública.</p>`}
+                  <div style="width:100%;margin-top:4px"><div class="progress"><i style="width:${pct}%"></i></div><div style="display:flex;justify-content:space-between;font-size:.75rem;color:var(--muted);margin-top:6px"><span>${petition === "resuelto" ? "Problema ya resuelto" : petition === "enviada" ? "Carta enviada" : ready ? "Meta alcanzada" : "Petición colectiva"}</span><span>${c.apoyos}/${THRESHOLD}</span></div></div>
+                  ${petition === "resuelto"
+                    ? `<p class="hint" style="font-size:.77rem;margin:0">Problema ya resuelto. No corresponde enviar la carta.</p>`
+                    : petition === "enviada"
+                      ? `<a class="btn btn-ghost btn-block" href="#/peticiones?carta=${encodeURIComponent(c.id)}">${icon("doc", 17)} Ver carta enviada</a>`
+                      : ready
+                        ? `<a class="btn btn-primary btn-block" href="#/peticiones?carta=${encodeURIComponent(c.id)}">${icon("doc", 17)} Ver petición colectiva</a>`
+                        : `<p class="muted" style="font-size:.77rem;margin:0">Faltan ${THRESHOLD - c.apoyos} apoyos para la carta pública.</p>`}
                 </div>
               </div>
             </div>
@@ -1674,9 +1694,10 @@ Vecinos de ${c.barrio} · AvisAR Vicente López`;
 function renderPeticiones() {
   const { params } = getRoute();
   const pending = params.get("grupo") === "en-camino";
-  const ordered = [...state.claims].sort((a, b) => b.apoyos - a.apoyos);
-  const readyCount = ordered.filter((claim) => claim.apoyos >= THRESHOLD).length;
-  const list = ordered.filter((claim) => (claim.apoyos < THRESHOLD) === pending);
+  const ordered = [...state.claims].filter((claim) => claim.estado !== "resuelto").sort((a, b) => b.apoyos - a.apoyos);
+  const isReady = (claim) => ["habilitada", "enviada"].includes(petitionStatus(claim));
+  const readyCount = ordered.filter(isReady).length;
+  const list = ordered.filter((claim) => isReady(claim) === !pending);
   const { page, navigation } = claimPagination(list, "peticiones", params, 8);
   return `<section class="section"><div class="container">
     <div class="section-head"><div class="view-heading"><h1>Peticiones colectivas</h1>
@@ -1691,7 +1712,7 @@ function renderPeticiones() {
         return `<article class="petition-card ${pending ? "" : "ready"}"><div>
           <div class="petition-badges">${catChip(claim.categoria)}${statusBadge(claim.estado)}</div>
           <h3>${esc(claim.titulo)}</h3><p class="muted">${esc(claim.barrio)} · ${esc(claim.direccion)}</p>
-          ${pending ? "" : `<p class="muted">${claim.peticionEnviada ? '<span class="badge badge-verified">Enviada</span> a' : "Destinatario"} ${esc(petitionArea(claim))}</p>`}
+          ${pending ? "" : `<p class="muted">${claim.peticionEnviada ? '<span class="badge badge-verified">Carta enviada</span> a' : "Destinatario"} ${esc(petitionArea(claim))}</p>`}
           <div class="pbar" style="--c:${CATEGORY_COLOR}"><div class="progress"><i style="width:${pct}%"></i></div>
           <div class="pmeta"><span>${claim.apoyos} apoyos</span><span>${pending ? "Faltan " + (THRESHOLD - claim.apoyos) : "Meta alcanzada"}</span></div></div></div>
           <div class="petition-actions">${pending ? "" : `<button class="btn btn-primary btn-sm" data-action="letter" data-id="${esc(claim.id)}">${icon("doc", 16)} Ver carta</button>`}
@@ -1977,18 +1998,21 @@ function deleteOwnClaim(id, dialog) {
 function openLetter(id) {
   const c = getClaim(id);
   if (!c || c.apoyos < THRESHOLD) return;
+  const status = petitionStatus(c);
   if ([...document.querySelectorAll("[data-letter-id]")].some(el => el.dataset.letterId === id)) return;
   const backdrop = document.createElement("div");
   backdrop.className = "modal-backdrop";
   backdrop.dataset.letterId = id;
   backdrop.innerHTML = `<div class="modal" role="dialog" aria-modal="true" aria-labelledby="letterTitle">
-    <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start"><div><h3 id="letterTitle">Carta al área responsable</h3><p class="muted" style="margin:0 0 14px;font-size:.86rem">${c.peticionEnviada ? "Enviada a " + esc(petitionArea(c)) + " · " + fmtDate(c.peticionEnviada.fecha) : esc(petitionArea(c))}</p></div><button class="btn btn-ghost btn-sm" data-action="close-modal" aria-label="Cerrar">${icon("close", 16)}</button></div>
+    <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start"><div><h3 id="letterTitle">Carta al área responsable</h3><p class="muted" style="margin:0 0 14px;font-size:.86rem">${status === "resuelto" ? "Problema ya resuelto · la carta no se puede enviar" : status === "enviada" ? "Enviada a " + esc(petitionArea(c)) + " · " + fmtDate(c.peticionEnviada.fecha) : esc(petitionArea(c))}</p></div><button class="btn btn-ghost btn-sm" data-action="close-modal" aria-label="Cerrar">${icon("close", 16)}</button></div>
     <div class="letter">${esc(letterText(c))}</div>
     <div style="display:flex;gap:10px;margin-top:16px;flex-wrap:wrap"><button class="btn btn-ghost btn-sm" data-action="copy-letter" data-id="${esc(c.id)}">${icon("doc", 16)} Copiar carta</button>
-    ${c.peticionEnviada || !ownsClaim(c) ? "" : `<button class="btn btn-primary btn-sm" data-action="send-letter" data-id="${esc(c.id)}">Enviar al área</button>`}</div>
+    ${status === "habilitada" && ownsClaim(c) ? `<button class="btn btn-primary btn-sm" data-action="send-letter" data-id="${esc(c.id)}">Enviar al área</button>` : ""}</div>
     <div class="letter-send-status" role="status"></div>
-    ${!c.peticionEnviada && !ownsClaim(c) ? '<p class="hint">Solo el autor del reclamo puede enviar esta carta al área responsable.</p>' : ""}
-    <p class="hint">El envío se registra en AvisAR como parte de la demostración.</p>
+    ${status === "resuelto" ? '<p class="hint">El problema ya está resuelto, por eso no se puede enviar la carta.</p>'
+      : status === "enviada" ? '<p class="hint">Carta enviada. No se puede enviar dos veces.</p>'
+        : !ownsClaim(c) ? '<p class="hint">Solo el autor del reclamo puede enviar esta carta al área responsable.</p>' : ""}
+    ${status === "habilitada" ? '<p class="hint">El envío se registra en AvisAR como parte de la demostración.</p>' : ""}
   </div>`;
   document.body.appendChild(backdrop);
   requestAnimationFrame(() => backdrop.classList.add("show"));
@@ -1997,7 +2021,10 @@ function openLetter(id) {
 
 function sendPetition(id, backdrop) {
   const claim = getClaim(id);
-  if (!claim || claim.apoyos < THRESHOLD || claim.peticionEnviada) return;
+  if (!claim) return;
+  if (claim.estado === "resuelto") { toast("El problema ya está resuelto. No se puede enviar la carta."); return; }
+  if (claim.peticionEnviada) { toast("La carta ya fue enviada."); return; }
+  if (claim.apoyos < THRESHOLD) return;
   if (!requireLogin(location.hash)) {
     closeModal(backdrop);
     return;
