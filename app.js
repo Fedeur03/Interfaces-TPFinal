@@ -10,6 +10,7 @@ const EMPTY_SESSION = { logged: false, email: "", nombre: "" };
 const SESSION_KEY = STORE_KEY + "_session";
 const ADMIN_EMAIL = "admin@avisar.test";
 const ADMIN_PASSWORD = "admin123";
+const ADMIN_NAME = "Administrador Municipal";
 const CATEGORY_COLOR = "#39776d";
 
 const CATEGORIES = {
@@ -139,7 +140,16 @@ const DEMO_NEIGHBOR_EMAIL = "vecino.demo@avisar.gob.ar";
 const USERNAME_PATTERN = "[a-zA-Z0-9_]{3,24}";
 
 function publicUsername(account) {
+  if (!account) return "Vecino/a";
+  if (account.email === ADMIN_EMAIL || account.role === "municipal-admin") return "Administrador";
   return account.usuario || (account.email === DEMO_NEIGHBOR_EMAIL ? "Vecino" : "Vecino/a");
+}
+
+// Nombres usados en versiones anteriores se muestran con el nombre actual.
+function commentAuthor(comment) {
+  if (comment.muni) return comment.autor;
+  if (comment.usuario === "Moderador" || comment.usuario === "Admin") return "Administrador";
+  return comment.usuario || "Vecino/a";
 }
 
 function validateUsername(username, currentEmail = "") {
@@ -179,6 +189,7 @@ function hasMunicipalAccess(session = state.session) {
 function normalizeSession(session) {
   const profile = normalizeProfile(session);
   if (!profile || (profile.email?.toLowerCase() === ADMIN_EMAIL && !hasMunicipalAccess(profile))) return { ...EMPTY_SESSION };
+  if (profile.email === ADMIN_EMAIL) profile.nombre = ADMIN_NAME;
   return profile;
 }
 
@@ -948,7 +959,7 @@ function renderReclamo(id) {
   const media = renderClaimMedia(c, cat, reference);
   const news = c.comentarios.filter((m) => m.muni).slice(-3).reverse();
   const comments = c.comentarios.length ? c.comentarios.map((m) => {
-    const author = m.muni ? m.autor : m.usuario || "Vecino/a";
+    const author = commentAuthor(m);
     return `
     <div class="comment"><div class="avatar ${m.muni ? "muni" : ""}">${m.muni ? icon("building", 18) : esc((author || "V").slice(0, 1).toUpperCase())}</div>
     <div><div class="who">${esc(author)} ${m.muni ? '<span class="badge badge-verified">Oficial</span>' : ""} <span class="when">${fmtDate(m.fecha)}</span></div><p>${esc(m.texto)}</p></div></div>`; }).join("") : `<p class="muted" style="font-size:.88rem">Todavía no hay comentarios.</p>`;
@@ -1194,7 +1205,7 @@ function renderPerfil() {
       <aside class="panel panel-pad account-summary">
         <div class="avatar-lg">${esc(initials(publicUsername(account)))}</div>
         <h3>${esc(municipal ? account.nombre : publicUsername(account))}</h3><p class="muted">${esc(account.email)}</p>
-        <hr class="divider"><p><strong>${municipal ? "Administración municipal" : "Cuenta vecinal"}</strong></p>
+        <hr class="divider"><p><strong>${municipal ? "Administración Municipal" : "Cuenta vecinal"}</strong></p>
         <p>Barrio <strong>${esc(account.barrio || "Sin indicar")}</strong></p>
         <a class="btn btn-ghost" href="#/mis-reclamos">Mis reclamos · ${mine.length}</a>
       </aside>
@@ -2666,7 +2677,7 @@ document.addEventListener("submit", async (e) => {
     const pass = String(data.get("password") || "");
     if (email.toLowerCase() === ADMIN_EMAIL) {
       if (pass !== ADMIN_PASSWORD) { toast("Revisá el email y la contraseña."); return; }
-      state.session = { logged: true, email: ADMIN_EMAIL, nombre: "Administración municipal", role: "municipal-admin", remember: data.has("remember") };
+      state.session = { logged: true, email: ADMIN_EMAIL, nombre: ADMIN_NAME, role: "municipal-admin", remember: data.has("remember") };
       finishLogin("#/municipal");
       return;
     }
