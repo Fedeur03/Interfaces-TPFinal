@@ -1695,30 +1695,43 @@ Vecinos de ${c.barrio} · AvisAR Vicente López`;
 
 function renderPeticiones() {
   const { params } = getRoute();
-  const pending = params.get("grupo") === "en-camino";
-  const ordered = [...state.claims].filter((claim) => claim.estado !== "resuelto").sort((a, b) => b.apoyos - a.apoyos);
-  const isReady = (claim) => ["habilitada", "enviada"].includes(petitionStatus(claim));
-  const readyCount = ordered.filter(isReady).length;
-  const list = ordered.filter((claim) => isReady(claim) === !pending);
+  const isResuelta = (claim) => claim.estado === "resuelto" && claim.apoyos >= THRESHOLD;
+  const isHabilitada = (claim) => claim.estado !== "resuelto" && claim.apoyos >= THRESHOLD;
+  const groups = {
+    habilitadas: state.claims.filter(isHabilitada),
+    "en-camino": state.claims.filter((claim) => !isHabilitada(claim) && !isResuelta(claim)),
+    resueltas: state.claims.filter(isResuelta),
+  };
+  const requested = params.get("grupo") || "habilitadas";
+  const current = Object.hasOwn(groups, requested) ? requested : "habilitadas";
+  const list = [...groups[current]].sort((a, b) => b.apoyos - a.apoyos);
   const { page, navigation } = claimPagination(list, "peticiones", params, 8);
+  const tab = (key, label) => {
+    const active = current === key;
+    const href = key === "habilitadas" ? "#/peticiones" : `#/peticiones?grupo=${key}`;
+    return `<a class="btn ${active ? "btn-primary" : "btn-ghost"}" href="${href}" ${active ? 'aria-current="page"' : ""}>${label} · ${groups[key].length}</a>`;
+  };
+  const titles = { habilitadas: "Peticiones habilitadas", "en-camino": "En camino a la meta", resueltas: "Resueltas" };
   return `<section class="section"><div class="container">
     <div class="section-head"><div class="view-heading"><h1>Peticiones colectivas</h1>
       <p>Con ${THRESHOLD} apoyos, un reclamo habilita una carta al área responsable de su categoría.</p></div></div>
     <nav class="chipbar petition-tabs" aria-label="Grupos de peticiones">
-      <a class="btn ${pending ? "btn-ghost" : "btn-primary"}" href="#/peticiones" ${pending ? "" : 'aria-current="page"'}>Habilitadas · ${readyCount}</a>
-      <a class="btn ${pending ? "btn-primary" : "btn-ghost"}" href="#/peticiones?grupo=en-camino" ${pending ? 'aria-current="page"' : ""}>En camino · ${ordered.length - readyCount}</a>
+      ${tab("habilitadas", "Habilitadas")}
+      ${tab("en-camino", "En camino")}
+      ${tab("resueltas", "Resueltas")}
     </nav>
-    <div id="claim-results" tabindex="-1"><h2>${pending ? "En camino a la meta" : "Peticiones habilitadas"}</h2>
+    <div id="claim-results" tabindex="-1"><h2>${titles[current]}</h2>
+      ${current === "resueltas" ? `<p class="muted" style="font-size:.85rem;margin:0 0 12px">Ya tienen solución y ${THRESHOLD} apoyos o más: no se pueden sumar apoyos ni enviar la carta.</p>` : ""}
       ${page.length ? page.map((claim) => {
         const pct = Math.min(100, Math.round(claim.apoyos / THRESHOLD * 100));
-        return `<article class="petition-card ${pending ? "" : "ready"}"><div>
-          <div class="petition-badges">${catChip(claim.categoria)}${statusBadge(claim.estado)}</div>
+        return `<article class="petition-card ${current === "habilitadas" ? "ready" : ""}"><div>
+          <div class="petition-badges">${catChip(claim.categoria)}${statusBadge(claim.estado)}${current === "resueltas" ? '<span class="badge badge-verified">Problema ya resuelto</span>' : ""}</div>
           <h3>${esc(claim.titulo)}</h3><p class="muted">${esc(claim.barrio)} · ${esc(claim.direccion)}</p>
-          ${pending ? "" : `<p class="muted">${claim.peticionEnviada ? '<span class="badge badge-verified">Carta enviada</span> a' : "Destinatario"} ${esc(petitionArea(claim))}</p>`}
+          ${current === "habilitadas" ? `<p class="muted">${claim.peticionEnviada ? '<span class="badge badge-verified">Carta enviada</span> a' : "Destinatario"} ${esc(petitionArea(claim))}</p>` : ""}
           <div class="pbar" style="--c:${CATEGORY_COLOR}"><div class="progress"><i style="width:${pct}%"></i></div>
-          <div class="pmeta"><span>${claim.apoyos} apoyos</span><span>${pending ? "Faltan " + (THRESHOLD - claim.apoyos) : "Meta alcanzada"}</span></div></div></div>
-          <div class="petition-actions">${pending ? "" : `<button class="btn btn-primary btn-sm" data-action="letter" data-id="${esc(claim.id)}">${icon("doc", 16)} Ver carta</button>`}
-          <a class="btn btn-ghost btn-sm" href="#/reclamo/${esc(claim.id)}">${pending ? "Ver y apoyar" : "Ver reclamo"}</a></div></article>`;
+          <div class="pmeta"><span>${claim.apoyos} apoyos</span><span>${current === "en-camino" ? "Faltan " + (THRESHOLD - claim.apoyos) : current === "resueltas" ? "Resuelto" : "Meta alcanzada"}</span></div></div></div>
+          <div class="petition-actions">${current === "habilitadas" ? `<button class="btn btn-primary btn-sm" data-action="letter" data-id="${esc(claim.id)}">${icon("doc", 16)} Ver carta</button>` : ""}
+          <a class="btn btn-ghost btn-sm" href="#/reclamo/${esc(claim.id)}">${current === "en-camino" && claim.estado !== "resuelto" ? "Ver y apoyar" : "Ver reclamo"}</a></div></article>`;
       }).join("") : '<div class="empty">Todavía no hay iniciativas en esta sección.</div>'}
       ${navigation}
     </div>
