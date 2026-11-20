@@ -965,6 +965,7 @@ function renderReclamo(id) {
     notificaciones: ["#/notificaciones", "Volver a notificaciones"],
     "mis-reclamos": ["#/mis-reclamos", "Volver a mis reclamos"],
     peticiones: ["#/peticiones", "Volver a peticiones"],
+    mapa: ["#/mapa", "Volver al mapa"],
   };
   const [backHref, backLabel] = backTargets[getRoute().params.get("desde")] || ["#/reclamos", "Volver a explorar"];
 
@@ -1463,7 +1464,7 @@ function renderMapResults(list, params) {
       const characters = Array.from(claim.titulo);
       const title = characters.length > CLAIM_TITLE_LIMIT ? characters.slice(0, CLAIM_TITLE_LIMIT - 3).join("").trimEnd() + "..." : claim.titulo;
       const summary = `${claim.barrio} · ${ESTADOS[claim.estado]} · ${claim.apoyos} apoyos`;
-      return `<a class="map-mini" href="#/reclamo/${esc(claim.id)}" style="--c:${category.color}" aria-label="${esc(claim.titulo + " · " + summary)}">
+      return `<a class="map-mini" href="#/reclamo/${esc(claim.id)}?desde=mapa" style="--c:${category.color}" aria-label="${esc(claim.titulo + " · " + summary)}">
         <span class="ic">${icon(category.icon, 20)}</span><span class="map-mini-copy"><span class="t">${esc(title)}</span>
         <span class="s">${esc(summary)}</span></span></a>`;
     }).join("")}</div>${page.navigation}`;

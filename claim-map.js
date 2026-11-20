@@ -211,7 +211,7 @@ class ClaimMap {
     const area = neighborhoods.size > 2 ? "Varios barrios" : [...neighborhoods].join(" y ");
     const title = count > 1 ? `${count} reclamos · ${area}` : `${claim.titulo} · ${ESTADOS[claim.estado] || ""}`;
     const tag = count > 1 ? "button" : this.pick ? "span" : "a";
-    const extra = count > 1 ? 'type="button"' : this.pick ? 'aria-hidden="true"' : `href="#/reclamo/${esc(claim.id)}"`;
+    const extra = count > 1 ? 'type="button"' : this.pick ? 'aria-hidden="true"' : `href="#/reclamo/${esc(claim.id)}?desde=mapa"`;
     const category = catMeta(claim.categoria);
     const photo = (c) => {
       const src = claimPhoto(c, "thumb");
@@ -241,7 +241,7 @@ class ClaimMap {
 
   showResults(group, trigger) {
     this.results.innerHTML = `<div class="map-group-header"><strong>${group.points.length} reclamos en este punto</strong><button type="button" data-map-control="close" aria-label="Cerrar reclamos agrupados">×</button></div>
-      <ul>${group.points.map(({ claim }) => `<li><a href="#/reclamo/${esc(claim.id)}">${esc(claim.titulo)}</a></li>`).join("")}</ul>`;
+      <ul>${group.points.map(({ claim }) => `<li><a href="#/reclamo/${esc(claim.id)}?desde=mapa">${esc(claim.titulo)}</a></li>`).join("")}</ul>`;
     this.results.hidden = false;
     this.resultsTrigger = trigger;
     this.results.querySelector("button").focus({ preventScroll: true });
