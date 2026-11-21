@@ -279,6 +279,12 @@ function ageFromDate(iso) {
 }
 const MIN_AGE = 18;
 function catMeta(key) { return REPORT_CATEGORIES[key] || { label: key, color: "#64748b", icon: "pin" }; }
+
+function categoryOptions(selected = "", allLabel = "Todas las categorías") {
+  return `<option value="" ${selected ? "" : "selected"}>${esc(allLabel)}</option>` +
+    Object.entries(REPORT_CATEGORIES).map(([key, item]) =>
+      `<option value="${key}" ${key === selected ? "selected" : ""}>${esc(item.label)}</option>`).join("");
+}
 function catChip(key) { const c = catMeta(key); return `<span class="chip" style="--c:${c.color}"><span class="sw"></span>${esc(c.label)}</span>`; }
 function statusBadge(e) { return `<span class="badge badge-${e}">${ESTADOS[e] || e}</span>`; }
 // Un resuelto nunca habilita la carta, aunque tenga 100 apoyos o ya la haya enviado.
@@ -299,12 +305,12 @@ function initials(name) {
   return ((parts[0] || "V")[0] + (parts[1] ? parts[1][0] : "")).toUpperCase();
 }
 
-function claimCard(c) {
+function claimCard(c, { desde = "inicio" } = {}) {
   const cat = catMeta(c.categoria);
   const photo = claimPhoto(c, "card");
   const media = photo && !photo.startsWith("data:video/") ? `<img class="media-img" src="${esc(photo)}" alt="" loading="lazy">` : `<span class="big-ic">${icon(cat.icon, 52, 1.7)}</span>`;
   return `
-    <a class="claim-card" href="#/reclamo/${c.id}?desde=inicio">
+    <a class="claim-card" href="#/reclamo/${c.id}?desde=${encodeURIComponent(desde)}">
       <div class="claim-photo" style="--c:${cat.color}">${media}</div>
       <div class="claim-body">
         <div style="display:flex;gap:7px;flex-wrap:wrap">${catChip(c.categoria)}${statusBadge(c.estado)}${petitionBadge(c)}</div>
@@ -829,13 +835,15 @@ function claimPagination(claims, route, params, perPage = 10, compact = false) {
 }
 
 function renderVerReclamos() {
-  const claims = prioritizeClaims(state.claims.slice(), (a, b) => b.fecha.localeCompare(a.fecha));
-  const { page, count, navigation } = claimPagination(claims, "ver-reclamos", getRoute().params);
+  const { params } = getRoute();
+  const cat = Object.hasOwn(REPORT_CATEGORIES, params.get("cat")) ? params.get("cat") : "";
+  const claims = state.claims.filter((c) => !cat || c.categoria === cat).sort((a, b) => b.fecha.localeCompare(a.fecha) || String(b.numero || "").localeCompare(String(a.numero || "")));
+  const { page, count, navigation } = claimPagination(claims, "ver-reclamos", params, 12);
   return `<section class="section"><div class="container">
-    <div class="section-head"><div class="view-heading"><h1 id="claim-results" tabindex="-1">Ver reclamos</h1><p>Reclamos hechos por vecinos.</p></div>
-      <a class="btn btn-ghost" href="#/reclamos">${icon("search", 17)} Explorar y filtrar</a>
+    <div class="section-head"><div class="view-heading"><h1 id="claim-results" tabindex="-1">Últimos reclamos</h1><p style="white-space:nowrap">Los más recientes primero, de todos los estados. Se actualiza al publicarse uno nuevo.</p></div>
+      <div class="view-actions"><label class="stats-period">Categoría <select class="input" id="verReclamosCat">${categoryOptions(cat, "Todas")}</select></label>${cat ? `<a class="btn btn-ghost" href="#/ver-reclamos">Limpiar filtro</a>` : ""}<a class="btn btn-ghost" href="#/reclamos">${icon("search", 17)} Explorar y filtrar</a></div>
     </div>
-    ${page.length ? `<p class="page-count" role="status">${count}</p><div class="claim-list">${page.map((c) => claimRow(c, { desde: location.hash || "#/ver-reclamos" })).join("")}</div>` : `<div class="empty"><p>Todavía no hay reclamos publicados.</p><a class="btn btn-primary" href="#/crear">Crear reclamo</a></div>`}
+    ${page.length ? `<p class="page-count" role="status">${count}</p><div class="claim-grid">${page.map((c) => claimCard(c, { desde: location.hash || "#/ver-reclamos" })).join("")}</div>` : `<div class="empty"><p>Todavía no hay reclamos publicados.</p><a class="btn btn-primary" href="#/crear">Crear reclamo</a></div>`}
     ${navigation}
   </div></section>`;
 }
@@ -995,6 +1003,7 @@ function renderReclamo(id) {
   const generatedTitle = description.length > 64 ? description.slice(0, 61).trim() + "…" : description;
   const detailTitle = c.titulo === generatedTitle ? description : c.titulo;
   const supported = ownSupports().includes(c.id);
+  const official = c.owner === ADMIN_EMAIL;
   const pct = Math.min(100, Math.round((c.apoyos / THRESHOLD) * 100));
   const petition = petitionStatus(c);
   const ready = petition === "habilitada";
@@ -1056,7 +1065,7 @@ function renderReclamo(id) {
             <div class="divider"></div>
             <h3 style="margin:0 0 14px;font-size:1rem">Estado del problema</h3>
             <div class="state-compare">
-              <div class="state-box"><div class="st-label">Estado reportado</div><div class="st-value">${icon("users", 17)} Reportado por vecinos</div><p>Publicado el ${fmtDate(c.fecha)} · ${c.apoyos} apoyos comunitarios.</p></div>
+              <div class="state-box"><div class="st-label">${official ? "Publicación oficial" : "Estado reportado"}</div><div class="st-value">${icon(official ? "building" : "users", 17)} ${official ? "Publicado por un Administrador Municipal" : "Reportado por vecinos"}</div><p>Publicado el ${fmtDate(c.fecha)} · ${c.apoyos} ${official ? "apoyos" : "apoyos comunitarios"}.</p></div>
               <div class="state-box official"><div class="st-label">Estado actual · Municipio</div><div class="st-value">${statusBadge(c.estado)}${c.verificado ? ` <span class="verified-word">${icon("check", 15)} Verificado</span>` : ""}</div><p>${ESTADO_DESC[c.estado] || ""}</p></div>
             </div>
             ${c.evidencia || c.evidenciaFoto || c.evidenciaMedia ? `<div class="resolution-evidence">
@@ -1298,11 +1307,20 @@ function renderPerfil() {
 function renderMisReclamos() {
   if (!state.session.logged) return authGate("Ingresá para ver tus reclamos", "Iniciá sesión para consultar el estado de los reclamos que creaste.");
   const mine = state.claims.filter((c) => c.owner === state.session.email);
-  const estado = getRoute().params.get("estado");
+  const { params } = getRoute();
+  const cat = Object.hasOwn(REPORT_CATEGORIES, params.get("cat")) ? params.get("cat") : "";
+  const scoped = mine.filter((c) => !cat || c.categoria === cat);
+  const estado = params.get("estado");
   const active = Object.hasOwn(ESTADOS, estado) ? estado : "";
   const tabs = [["", "Todos"], ["abierto", "En revisión"], ["en_proceso", "En curso"], ["resuelto", "Resueltos"]];
-  const filtered = active ? mine.filter((c) => c.estado === active) : mine;
-  const count = (key) => mine.filter((c) => !key || c.estado === key).length;
+  const filtered = active ? scoped.filter((c) => c.estado === active) : scoped;
+  const count = (key) => scoped.filter((c) => !key || c.estado === key).length;
+  const mineURL = (key) => {
+    const p = new URLSearchParams();
+    if (key) p.set("estado", key);
+    if (cat) p.set("cat", cat);
+    return "#/mis-reclamos" + (p.size ? "?" + p.toString() : "");
+  };
   const cards = filtered.map((c) => {
     const category = REPORT_CATEGORIES[c.categoria]?.label || c.categoria || "Espacio público";
     const status = ESTADOS[c.estado] || "En revisión";
@@ -1323,8 +1341,8 @@ function renderMisReclamos() {
   }).join("");
   return `<section class="section my-claims-page"><div class="container">
     <header class="my-claims-hero"><div class="view-heading"><h1>Mis reclamos</h1><p>Revisá el estado y las novedades de tus reportes.</p></div></header>
-    <div class="my-claims-toolbar"><nav class="chipbar status-tabs" aria-label="Filtrar por estado">${tabs.map(([key,label]) => `<a class="chipbtn ${key === active ? "is-active" : ""}" ${key === active ? 'aria-current="page"' : ""} href="#/mis-reclamos${key ? "?estado=" + key : ""}">${label} (${count(key)})</a>`).join("")}</nav><a class="btn btn-primary" href="#/crear">${icon("plus",17)} Crear reclamo</a></div>
-    ${filtered.length ? `<div class="my-claims-list">${cards}</div>` : `<div class="empty"><p>${mine.length ? "No tenés reclamos en este estado." : "Todavía no tenés reclamos."}</p>${mine.length ? "" : `<a class="btn btn-primary" href="#/crear">Crear mi primer reclamo</a>`}</div>`}
+    <div class="my-claims-toolbar"><div class="my-claims-filters"><nav class="chipbar status-tabs" aria-label="Filtrar por estado">${tabs.map(([key,label]) => `<a class="chipbtn ${key === active ? "is-active" : ""}" ${key === active ? 'aria-current="page"' : ""} href="${mineURL(key)}">${label} (${count(key)})</a>`).join("")}</nav><label class="stats-period">Categoría <select class="input" id="misReclamosCat">${categoryOptions(cat, "Todas")}</select></label></div><a class="btn btn-primary" href="#/crear">${icon("plus",17)} Crear reclamo</a></div>
+    ${filtered.length ? `<div class="my-claims-list">${cards}</div>` : `<div class="empty"><p>${mine.length ? "No hay reclamos con este filtro." : "Todavía no tenés reclamos."}</p>${mine.length ? "" : `<a class="btn btn-primary" href="#/crear">Crear mi primer reclamo</a>`}</div>`}
   </div></section>`;
 }
 
@@ -1367,9 +1385,10 @@ function renderMunicipio() {
   </div></section>`;
 }
 
-function municipalURL(queue, q, id) {
+function municipalURL(queue, q, id, cat) {
   const params = new URLSearchParams({ cola: queue });
   if (q) params.set("q", q);
+  if (cat) params.set("cat", cat);
   if (id) params.set("id", id);
   return "#/municipal?" + params;
 }
@@ -1385,7 +1404,7 @@ function municipalEditor(c) {
       <h3 id="municipal-editor-title" tabindex="-1">${esc(c.titulo)}</h3>
       <p class="municipal-meta">#${esc(c.numero)} · ${esc(c.barrio)} · ${fmtDate(c.fecha)} · ${c.apoyos} ${c.apoyos === 1 ? "apoyo" : "apoyos"}</p>
       <p class="municipal-description">${esc(c.descripcion)}</p>
-      <a class="btn btn-ghost btn-sm" href="#/reclamo/${esc(c.id)}?desde=municipio">Ver reclamo público →</a>
+      <a class="btn btn-ghost btn-sm" href="#/reclamo/${esc(c.id)}?desde=${encodeURIComponent(location.hash || "#/municipal")}">Ver reclamo público →</a>
     </header>
     <form class="municipal-form" data-form="municipal" data-id="${esc(c.id)}">
       <div class="municipal-form-section">
@@ -1424,12 +1443,14 @@ function renderMunicipal() {
   const claims = state.claims;
   const { params } = getRoute();
   const selectedId = params.get("id");
-  const pending = claims.filter((c) => c.estado !== "resuelto");
-  const resolved = claims.filter((c) => c.estado === "resuelto");
+  const cat = Object.hasOwn(REPORT_CATEGORIES, params.get("cat")) ? params.get("cat") : "";
+  const inCategory = (c) => !cat || c.categoria === cat;
+  const pending = claims.filter((c) => c.estado !== "resuelto" && inCategory(c));
+  const resolved = claims.filter((c) => c.estado === "resuelto" && inCategory(c));
   const queues = {
     pendientes: { label: "Pendientes", items: pending },
     resueltos: { label: "Resueltos", items: resolved },
-    todos: { label: "Todos", items: claims },
+    todos: { label: "Todos", items: claims.filter(inCategory) },
   };
   const requested = params.get("cola");
   const queue = Object.hasOwn(queues, requested) ? requested
@@ -1443,18 +1464,22 @@ function renderMunicipal() {
   return `<section class="section municipal-panel"><div class="container">
     <div class="section-head municipal-heading"><div class="view-heading"><h1>Panel municipal</h1><p>Revisá la cola y publicá avances para los vecinos.</p></div><a class="btn btn-ghost" href="#/municipio">Volver al municipio</a></div>
     <nav class="municipal-tabs" aria-label="Colas de reclamos">${Object.entries(queues).map(([key, group]) =>
-      `<a href="${esc(municipalURL(key, q))}" ${key === queue ? 'aria-current="page"' : ""}>${group.label}<strong>${group.items.length}</strong></a>`
+      `<a href="${esc(municipalURL(key, q, null, cat))}" ${key === queue ? 'aria-current="page"' : ""}>${group.label}<strong>${group.items.length}</strong></a>`
     ).join("")}</nav>
     <div class="municipal-workspace">
       <aside class="panel municipal-queue" aria-labelledby="municipal-queue-title">
         <header><h3 id="municipal-queue-title">Reclamos ${queue === "todos" ? "en el panel" : queues[queue].label.toLowerCase()}</h3>
           <form data-form="municipal-search" data-queue="${queue}">
-            <label for="municipalQuery">Buscar por título, barrio o número</label>
-            <div class="municipal-search"><input class="input" type="search" name="q" id="municipalQuery" value="${esc(q)}" placeholder="Ej.: Olivos o E-001"><button class="btn btn-ghost" type="submit" aria-label="Buscar reclamos">${icon("search", 17)}</button></div>
+            <div class="municipal-filters">
+              <div><label for="municipalQuery">Buscar por título, barrio o número</label>
+              <div class="municipal-search"><input class="input" type="search" name="q" id="municipalQuery" value="${esc(q)}" placeholder="Ej.: Olivos o E-001"><button class="btn btn-ghost" type="submit" aria-label="Buscar reclamos">${icon("search", 17)}</button></div></div>
+              <div><label for="municipalCat">Categoría</label>
+              <select class="input" id="municipalCat" name="cat">${categoryOptions(cat, "Todas las categorías")}</select></div>
+            </div>
           </form>
-          <div class="municipal-queue-meta"><span role="status">${list.length} ${list.length === 1 ? "resultado" : "resultados"}</span>${q ? `<a href="${municipalURL(queue, "")}">Limpiar búsqueda</a>` : ""}</div>
+          <div class="municipal-queue-meta"><span role="status">${list.length} ${list.length === 1 ? "resultado" : "resultados"}</span>${q || cat ? `<a href="${municipalURL(queue, "", null, "")}">Limpiar filtros</a>` : ""}</div>
         </header>
-        ${list.length ? `<ul class="municipal-list">${list.map((c) => `<li><a href="${esc(municipalURL(queue, q, c.id))}" ${c === selected ? 'aria-current="true"' : ""}>
+        ${list.length ? `<ul class="municipal-list">${list.map((c) => `<li><a href="${esc(municipalURL(queue, q, c.id, cat))}" ${c === selected ? 'aria-current="true"' : ""}>
           <strong>${esc(c.titulo)}</strong><span class="municipal-meta">${esc(c.barrio)} · #${esc(c.numero)}</span>
           <span class="municipal-badges">${statusBadge(c.estado)}</span>
         </a></li>`).join("")}</ul>` : '<p class="municipal-queue-empty">No hay reclamos en esta selección.</p>'}
@@ -1724,31 +1749,37 @@ function renderPeticiones() {
   const { params } = getRoute();
   const isResuelta = (claim) => claim.estado === "resuelto" && claim.apoyos >= THRESHOLD;
   const isHabilitada = (claim) => claim.estado !== "resuelto" && claim.apoyos >= THRESHOLD;
+  const cat = Object.hasOwn(REPORT_CATEGORIES, params.get("cat")) ? params.get("cat") : "";
+  const scoped = state.claims.filter((claim) => !cat || claim.categoria === cat);
   const groups = {
-    habilitadas: state.claims.filter(isHabilitada),
-    "en-camino": state.claims.filter((claim) => !isHabilitada(claim) && !isResuelta(claim)),
-    resueltas: state.claims.filter(isResuelta),
+    habilitadas: scoped.filter(isHabilitada),
+    "en-camino": scoped.filter((claim) => !isHabilitada(claim) && !isResuelta(claim)),
+    resueltas: scoped.filter(isResuelta),
   };
   const requested = params.get("grupo") || "habilitadas";
   const current = Object.hasOwn(groups, requested) ? requested : "habilitadas";
-  const list = [...groups[current]].sort((a, b) => b.apoyos - a.apoyos);
+  const list = [...groups[current]].sort((a, b) => b.fecha.localeCompare(a.fecha) || b.apoyos - a.apoyos);
   const pageParams = new URLSearchParams(params);
   pageParams.delete("carta");
   const { page, navigation } = claimPagination(list, "peticiones", pageParams, 8);
   const tab = (key, label) => {
     const active = current === key;
-    const href = key === "habilitadas" ? "#/peticiones" : `#/peticiones?grupo=${key}`;
+    const p = new URLSearchParams();
+    if (key !== "habilitadas") p.set("grupo", key);
+    if (cat) p.set("cat", cat);
+    const href = "#/peticiones" + (p.size ? "?" + p.toString() : "");
     return `<a class="btn ${active ? "btn-primary" : "btn-ghost"}" href="${href}" ${active ? 'aria-current="page"' : ""}>${label} · ${groups[key].length}</a>`;
   };
   const titles = { habilitadas: "Peticiones habilitadas", "en-camino": "En camino a la meta", resueltas: "Resueltas" };
   return `<section class="section"><div class="container">
     <div class="section-head"><div class="view-heading"><h1>Peticiones colectivas</h1>
-      <p>Con ${THRESHOLD} apoyos, un reclamo habilita una carta al área responsable de su categoría.</p></div></div>
+      <p style="white-space:nowrap">Con ${THRESHOLD} apoyos, un reclamo habilita una carta al área responsable de su categoría. Dentro de cada grupo, del más reciente al más antiguo.</p></div></div>
     <nav class="chipbar petition-tabs" aria-label="Grupos de peticiones">
       ${tab("habilitadas", "Habilitadas")}
       ${tab("en-camino", "En camino")}
       ${tab("resueltas", "Resueltas")}
     </nav>
+    <label class="stats-period petition-filter">Categoría <select class="input" id="peticionesCat">${categoryOptions(cat, "Todas")}</select></label>
     <div id="claim-results" tabindex="-1"><h2>${titles[current]}</h2>
       ${current === "resueltas" ? `<p class="muted" style="font-size:.85rem;margin:0 0 12px">Ya tienen solución y ${THRESHOLD} apoyos o más: no se pueden sumar apoyos ni enviar la carta.</p>` : ""}
       ${page.length ? page.map((claim) => {
@@ -1760,7 +1791,7 @@ function renderPeticiones() {
           <div class="pbar" style="--c:${CATEGORY_COLOR}"><div class="progress"><i style="width:${pct}%"></i></div>
           <div class="pmeta"><span>${claim.apoyos} apoyos</span><span>${current === "en-camino" ? "Faltan " + (THRESHOLD - claim.apoyos) : current === "resueltas" ? "Resuelto" : "Meta alcanzada"}</span></div></div></div>
           <div class="petition-actions">${current === "habilitadas" ? `<button class="btn btn-primary btn-sm" data-action="letter" data-id="${esc(claim.id)}">${icon("doc", 16)} Ver carta</button>` : ""}
-          <a class="btn btn-ghost btn-sm" href="#/reclamo/${esc(claim.id)}?desde=peticiones">${current === "en-camino" && claim.estado !== "resuelto" ? "Ver y apoyar" : "Ver reclamo"}</a></div></article>`;
+          <a class="btn btn-ghost btn-sm" href="#/reclamo/${esc(claim.id)}?desde=${encodeURIComponent(location.hash || "#/peticiones")}">${current === "en-camino" && claim.estado !== "resuelto" ? "Ver y apoyar" : "Ver reclamo"}</a></div></article>`;
       }).join("") : '<div class="empty">Todavía no hay iniciativas en esta sección.</div>'}
       ${navigation}
     </div>
@@ -2506,6 +2537,15 @@ document.addEventListener("input", (event) => {
 /* ---------------- Eventos: change ---------------- */
 document.addEventListener("change", (e) => {
   if (e.target.id === "mapStatus") setMapFilter("estado", e.target.value);
+  if (e.target.id === "municipalCat") { e.target.form.requestSubmit(); return; }
+  if (["misReclamosCat", "peticionesCat", "verReclamosCat"].includes(e.target.id)) {
+    const { params } = getRoute();
+    const key = e.target.id === "misReclamosCat" ? "mis-reclamos" : e.target.id === "peticionesCat" ? "peticiones" : "ver-reclamos";
+    if (e.target.value) params.set("cat", e.target.value);
+    else params.delete("cat");
+    location.hash = "#/" + key + (params.size ? "?" + params.toString() : "");
+    return;
+  }
   if (e.target.id === "statsPeriod" || e.target.id === "statsBarrio") {
     const { params } = getRoute();
     const key = e.target.id === "statsPeriod" ? "periodo" : "barrio";
@@ -2594,6 +2634,7 @@ document.addEventListener("submit", async (e) => {
       return;
     }
     const owner = state.session.email;
+    const byAdmin = hasMunicipalAccess();
     const { lat, lng } = draftLatLng;
     const barrio = draftBarrio;
     const direccion = draftAddress || `${barrio} · ${lat.toFixed(5)}, ${lng.toFixed(5)}`;
@@ -2611,7 +2652,7 @@ document.addEventListener("submit", async (e) => {
         titulo, prioridad,
         categoria, barrio, direccion,
         descripcion, fecha: new Date().toISOString().slice(0, 10), apoyos: 0, estado: "abierto",
-        verificado: false, evidencia: "", foto: fotos[0] || video || "", fotos, video, owner, comentarios: [],
+        verificado: byAdmin, evidencia: "", foto: fotos[0] || video || "", fotos, video, owner, comentarios: [],
         lat, lng,
       };
       state.claims.unshift(claim);
@@ -2812,7 +2853,8 @@ document.addEventListener("submit", async (e) => {
   }
 
   if (kind === "municipal-search") {
-    location.hash = municipalURL(form.dataset.queue, String(new FormData(form).get("q") || "").trim());
+    const data = new FormData(form);
+    location.hash = municipalURL(form.dataset.queue, String(data.get("q") || "").trim(), null, String(data.get("cat") || ""));
     return;
   }
 
